@@ -2,10 +2,20 @@ basic:
   model: 'el_core_news_lg'
   lexicon: 'greek_sentiment_lexicon.tsv'
   included_feats: [
-    'embedding', 'similarity', 'subjectivity', 'subjectivity_counts',
-    'sentiment', 'sentiment_counts', 'emotion', 'pg_polarity_counts']
+    'llm_embeddings', 'embedding',
+    # Comment out `included_feats` below to speed up debbuging, during code developement.
+    'embedding', 'similarity', 'subjectivity', #'subjectivity_counts',
+    'sentiment', 'sentiment_counts', 'emotion', 'pg_polarity_counts'
+    ]
   included_resource_parts: ['title', 'body', 'sim_par', 'sim_sent']
 embeddings: null
+llm_embeddings:
+  method: 'ollama' #  transformers, ollama, api (not-implemented)
+  transformers:
+    model_name: 'bert-base-uncased'
+  ollama:
+    model_name: 'ilsp/meltemi-instruct:latest'
+
 similarity: null
 subjectivity:
   prefixes: ['subjectivity']

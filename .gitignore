@@ -3,3 +3,6 @@ data/*
 misc/*
 .idea
 .DS_Store
+Check4Facts/.venv
+.venv/*
+check4facts/data/*

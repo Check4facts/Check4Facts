@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "check4facts",
+			"path": "../.."
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"": true
+		}
+	}
+}

@@ -9,6 +9,9 @@ from nltk.corpus import stopwords
 from snowballstemmer import stemmer
 from polyglot.text import Text
 
+from transformers import AutoTokenizer, AutoModel
+import ollama
+
 from check4facts.config import DirConf
 
 
@@ -28,10 +31,14 @@ class FeaturesExtractor:
         self.subj_params = kwargs['subjectivity']
         self.sent_params = kwargs['sentiment']
         self.emo_params = kwargs['emotion']
+        self.llm_embedding_settings = kwargs.get('llm_embeddings', {})
 
         self.nlp = spacy.load(self.basic_params['model'])
         self.stemmer = stemmer('greek')
         self.lexicon_ = None
+        
+        if self.llm_embedding_settings:
+            self.initialize_llm()
 
     @property
     def lexicon(self):
@@ -53,6 +60,54 @@ class FeaturesExtractor:
                     self.lexicon_[col] = self.lexicon_[col].map(scores)
         return self.lexicon_
 
+    def _initialize_ollama_llm(self):
+        llm_embeddings = self.llm_embedding_settings.get('ollama')
+        model_name = llm_embeddings.get('model_name', 'ilsp/meltemi-instruct:latest')
+        # self.embedding_model = ollama.load_model(model_name)
+        ollama.embeddings(model=model_name, prompt='test', keep_alive=-1) # keep the model into memory 
+        # def embed(x:str, model:str='llama3:8b-instruct-q8_0'):
+        #     return np.array(ollama.embeddings(model=model, prompt=x)['embedding'])
+
+
+    def _initialize_transformers_llm(self):
+        llm_embeddings = self.llm_embedding_settings.get('transformers')
+        model_name = llm_embeddings.get('model_name', 'bert-base-uncased')
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.embedding_model = AutoModel.from_pretrained(model_name)
+        self.hidden_size = self.embedding_model.config.hidden_size
+
+    def initialize_llm(self):
+        self.llm_embedding_method = self.llm_embedding_settings["method"]
+        if self.llm_embedding_method.lower() == 'transformers':
+            self._initialize_transformers_llm()
+        elif self.llm_embedding_method.lower() == 'ollama':
+            self._initialize_ollama_llm()
+        else:
+            pass
+
+    def get_llm_embeddings(self, text):
+        if self.llm_embedding_method == 'transformers':
+            inputs = self.tokenizer(text, return_tensors='pt', truncation=True,
+                                     max_length=self.embedding_model.config.hidden_size)
+            outputs = self.embedding_model(**inputs)
+            embeddings = outputs.last_hidden_state[:, 0, :].detach().numpy()
+            return embeddings.flatten()
+        elif self.llm_embedding_method == 'ollama':
+            llm_embeddings = self.llm_embedding_settings.get('ollama')
+            model_name = llm_embeddings.get('model_name', 'ilsp/meltemi-instruct:latest')
+            response = ollama.embeddings(model=model_name, prompt=text, keep_alive=-1) # keep the model into memory 
+            embeddings = response['embedding'] # this is a list
+            print(text)
+            return np.array(embeddings)
+        
+        elif self.llm_embedding_method == 'api':
+            pass
+            # response = openai.Embedding.create(input=text, model=self.llm_embeddings.get('model', 'text-embedding-ada-002'))
+            # return np.array(response['data'][0]['embedding'])
+        else:
+            raise ValueError("Invalid embedding method selected for LLM embeddings")
+
+
     @staticmethod
     def text_preprocess(text):
         text = text.translate(str.maketrans('', '', string.punctuation))
@@ -73,13 +128,6 @@ class FeaturesExtractor:
         cols = [col for col in self.lexicon if col.startswith('subjectivity')]
         return np.mean([np.mean(a[cols].values) for a in annots]) \
             if annots else 0.5
-
-    def get_subjectivity_counts(self, annots):
-        cols = [col for col in self.lexicon if col.startswith('subjectivity')]
-        scores = [np.mean(a[cols].values) for a in annots]
-        obj_tokens = sum(s < self.subj_params['thr']['OBJ'] for s in scores)
-        subj_tokens = sum(s > self.subj_params['thr']['SUBJ'] for s in scores)
-        return np.array([obj_tokens, subj_tokens])
 
     def get_sentiment(self, annots):
         cols = [col for col in self.lexicon if col.startswith('polarity')]
@@ -115,7 +163,11 @@ class FeaturesExtractor:
         n_sentences = len(feats_list)
         aggr_feats = {'fertile_terms': np.sum([
             f['fertile_terms'] for f in feats_list])}
-
+        
+        if 'llm_embeddings' in self.basic_params['included_feats']:
+            feats = [d.get('llm_embeddings', 
+                           np.zeros(self.embedding_model.config.hidden_size)) for d in feats_list]  # Assuming embedding size is 768
+            aggr_feats['llm_embeddings'] = np.mean(feats, axis=0)
         if 'embedding' in self.basic_params['included_feats']:
             feats = [d['embedding'] for d in feats_list]
             aggr_feats['embedding'] = np.mean(feats, axis=0)
@@ -298,7 +350,8 @@ class FeaturesExtractor:
             for t in sent_doc if
             self.stemmer.stemWord(t.text) in self.lexicon['stem'].values]
         feats = {'fertile_terms': len(sent_doc)}
-
+        if 'llm_embeddings' in self.basic_params['included_feats']:
+            feats['llm_embeddings'] = self.get_llm_embeddings(sent)
         if 'embedding' in self.basic_params['included_feats']:
             feats['embedding'] = self.get_embedding(sent_doc)
         if 'similarity' in self.basic_params['included_feats']:
@@ -358,6 +411,24 @@ class FeaturesExtractor:
         if len(resources_feats) == 0:
             resources_feats.append(self.get_resource_features(
                 None, None, None, None, s_text))
+        
+        # Add embeddings directly on the body without splitting it 
+        if 'llm_embeddings' in self.basic_params['included_feats']:
+            # TODO: Make sure the dimensions are aligned if any of the title, body etc are not included.
+            # eg if title features where missing, body llm embeddings would come on the same position of the title's.
+            llm_embeddings_for_all_resources = []
+            for row in s_resources.itertuples():
+                resource_embeddings = []
+                title_embedding = self.get_llm_embeddings(text=row.title)
+                body_embedding = self.get_llm_embeddings(text=row.body)
+                sim_par_embedding = self.get_llm_embeddings(text=row.sim_par)
+                sim_sent_embedding = self.get_llm_embeddings(text=row.sim_sent)
+                s_text_embedding = self.get_llm_embeddings(text=s_text)
+                resource_embeddings = [title_embedding, body_embedding, sim_par_embedding, sim_sent_embedding,  s_text_embedding]
+                resource_embeddings_np = [np.array(x) for x in resource_embeddings]
+                llm_embeddings_for_all_resources.append(resource_embeddings_np)
+            llm_embeddings_for_all_resources = np.array(llm_embeddings_for_all_resources).flatten()
+
         if resources_feats:
             feats['r'] = {}
             if 'title' in self.basic_params['included_resource_parts']:
@@ -372,6 +443,9 @@ class FeaturesExtractor:
             if 'sim_sent' in self.basic_params['included_resource_parts']:
                 feats['r']['sim_sent'] = self.aggregate_sentence_features(
                     [d['sim_sent'] for d in resources_feats])
+            # TODO: Make sure these are added correctly.
+            if 'llm_embeddings' in self.basic_params['included_feats']:
+                feats['r']['llm'] = llm_embeddings_for_all_resources
         # result = {k: (np.nan_to_num(v) if np.isnan(v).any() else v) for k, v in
         #           flatten_dict(feats).items()}
         result = flatten_dict(feats)

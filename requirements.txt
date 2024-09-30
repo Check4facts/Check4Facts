@@ -1,0 +1,26 @@
+google-api-python-client
+pyyaml
+pandas
+numpy
+requests
+beautifulsoup4
+tika
+stopwords
+nltk
+scikit-learn
+spacy
+flask
+flask-cors
+sqlalchemy
+psycopg2-binary
+install
+uwsgi
+joblib
+snowballstemmer
+celery
+matplotlib
+polyglot
+# PyICU
+pycld2
+morfessor
+lxml
