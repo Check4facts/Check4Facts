@@ -21,7 +21,6 @@ flask = "*"
 flask-cors = "*"
 sqlalchemy = "*"
 psycopg2-binary = "*"
-install = "*"
 uwsgi = "*"
 joblib = "*"
 snowballstemmer = "*"
@@ -34,4 +33,4 @@ morfessor = "*"
 lxml = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.10"
