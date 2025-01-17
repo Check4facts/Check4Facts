@@ -11,6 +11,12 @@ from check4facts.scripts.harvest import Harvester
 from check4facts.scripts.search import SearchEngine
 from check4facts.scripts.features import FeaturesExtractor
 
+#imports for text summarization
+from check4facts.text_sum_scripts.llm_request import invoke_local_llm
+from check4facts.text_sum_scripts.text_process import text_to_bulleted_list
+from check4facts.text_sum_scripts.groq_api import groq_api
+
+
 db_path = os.path.join(DirConf.CONFIG_DIR, 'db_config.yml')  # while using uwsgi
 with open(db_path, 'r') as db_f:
     db_params = yaml.safe_load(db_f)
@@ -242,3 +248,48 @@ def intial_train_task(self):
     path = os.path.join(DirConf.MODELS_DIR, fname)
     t.save_best_model(path)
     print(f'Successfully saved the best model.')
+
+
+#Tasks for text summarization
+
+
+
+
+@shared_task(bind=True)
+def summarize_text(user_input, article_id):
+
+    # Check if text is valid
+    if len(user_input.split()) < 5:
+        return {"error": "Please enter a valid text"}
+    try:
+        article_id = int(article_id)
+    except ValueError:
+        print("Error: article_id is not an integer")
+
+    # Try invoking the groq_api to generate a summary
+    api = groq_api()
+    answer = api.run(user_input)
+
+    # If the invoking fails, or the input is too large, call the local implementation
+    if answer['response'] is None or len(user_input.split()) >= 1:
+        result = invoke_local_llm(user_input, article_id)
+        return result
+    else:
+        return {"summarization": text_to_bulleted_list(answer['response']), "time": answer['elapsed_time'], 
+                "article_id": article_id}
+
+
+
+@shared_task(bind=True)
+def celery_insert(task_id):
+    dbh.connect()
+    dbh.insert_summary(task_id)
+    dbh.disconnect()
+    
+
+@shared_task(bind=True)
+def celery_get_task_result(task_id):
+    dbh.connect()
+    result = dbh.get_successful_task_result(task_id)
+    dbh.disconnect()
+    return result

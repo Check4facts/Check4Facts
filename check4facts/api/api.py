@@ -9,6 +9,9 @@ from check4facts.api.tasks import status_task, analyze_task, train_task, intial_
 from check4facts.config import DirConf
 from check4facts.database import DBHandler
 
+#text summarization imports
+from check4facts.api.tasks import summarize_text, celery_get_task_result, celery_insert
+
 app = create_app()
 app.config['CELERY_BROKER_URL'] = 'sqla+postgresql://check4facts@localhost:5432/check4facts'
 app.config['result_backend'] = 'db+postgresql://check4facts@localhost:5432/check4facts'
@@ -79,6 +82,77 @@ def batch_task_status():
         response.append({'taskId': j['id'], 'status': result.status, 'taskInfo': result.info})
 
     return jsonify(response)
+
+
+#Text summarization api functions
+
+@app.route("/")
+def index():
+    return "Text summarization with the use of large language models"
+
+@app.route("/summarize", methods=["POST"])
+def get_sum():
+    data = request.get_json()
+    user_input = data.get('text', '').strip()
+    article_id = data.get('article_id',9999)
+
+    if not user_input:
+        return jsonify({
+            'status': 'error',
+            'message': 'Text is empty. Please provide the "text" field in your JSON.'
+        }), 400  
+
+    task = summarize_text.delay(user_input, article_id)
+    return jsonify({"task_id": task.id}), 202
+
+#mainly for debugging purposes. Not to be used in production
+@app.route('/db_fetch/<task_id>', methods=["GET"])
+def fetch(task_id):
+    task = celery_get_task_result.delay(task_id)
+
+    return jsonify({'task_id': task.id, 'status': 'Task created, check status later.'})
+
+
+@app.route('/db_insert/<task_id>', methods=["GET"])
+def insert(task_id):
+
+    task_result = client.AsyncResult(task_id, app=client)
+    if task_result.state == 'PENDING':  
+        return jsonify("The summary generation task is still pending. Please try again later.")
+    elif task_result.state == 'STARTED':
+        return jsonify("Summary is being generated. Please try again after some time.")
+    elif task_result.state == 'FAILURE':
+        return jsonify(f"The summary generation task failed: {task_result.info}")
+    elif task_result.state == 'SUCCESS':
+        task  = celery_insert.delay(task_id)
+        return jsonify(f"Summary was successfully inserted into the database: {task_result.info}")
+    else:
+        return jsonify(f"Unexpected task state: {task_result.state}")
+    
+
+@app.route("/task_state/<task_id>", methods=["GET"])
+def get_result(task_id):
+    from celery.result import AsyncResult
+
+    task_result = client.AsyncResult(task_id, app=client)
+
+    if task_result.state == "PENDING":
+        return jsonify({"status": "Task is still in progress"}), 202
+    elif task_result.state == "FAILURE":
+        return jsonify({"status": "Task failed", "error": str(task_result.info)}), 500
+    else:
+        if task_result.result:
+            return jsonify({"status": "Task completed", "result": task_result.result}), 200
+        else:
+            return jsonify({"status": "Task completed"})
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
