@@ -255,7 +255,7 @@ def intial_train_task(self):
 
 
 
-@shared_task(bind=True)
+@shared_task
 def summarize_text(user_input, article_id):
 
     # Check if text is valid
@@ -271,7 +271,7 @@ def summarize_text(user_input, article_id):
     answer = api.run(user_input)
 
     # If the invoking fails, or the input is too large, call the local implementation
-    if answer['response'] is None or len(user_input.split()) >= 1:
+    if answer['response'] is None or len(user_input.split()) >= 1900:
         result = invoke_local_llm(user_input, article_id)
         return result
     else:
@@ -280,14 +280,14 @@ def summarize_text(user_input, article_id):
 
 
 
-@shared_task(bind=True)
+@shared_task
 def celery_insert(task_id):
     dbh.connect()
     dbh.insert_summary(task_id)
     dbh.disconnect()
     
 
-@shared_task(bind=True)
+@shared_task
 def celery_get_task_result(task_id):
     dbh.connect()
     result = dbh.get_successful_task_result(task_id)
