@@ -1,6 +1,7 @@
 
 from check4facts.scripts.text_sum.translate import *
 import numpy as np
+import re
 from spacy.lang.el import Greek
 nlp = Greek()
 nlp.add_pipe("sentencizer")
@@ -23,25 +24,7 @@ def text_to_bulleted_list(text):
 
 
 def capitalize_bullets(text):
-    lines = text.splitlines()
-    updated_lines = []
-    for line in lines:
-        
-        if line.strip().startswith("<li>") and line.strip().endswith("</li>"):
-            start_tag = "<li>"
-            end_tag = "</li>"
-            content = line.strip()[len(start_tag):-len(end_tag)]
-            
-            if content:
-                content = f"{content[0].upper()}{content[1:]}"
-        
-            updated_line = f"{start_tag}{content}{end_tag}"
-        else:
-            updated_line = line
-        
-        updated_lines.append(updated_line)
-    
-    return "".join(updated_lines)
+    return re.sub(r'(<li>)(.*?)(</li>)', lambda match: match.group(1) + match.group(2).capitalize() + match.group(3), text)
 
 
 

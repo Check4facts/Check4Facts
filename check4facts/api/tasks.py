@@ -12,7 +12,7 @@ from check4facts.scripts.search import SearchEngine
 from check4facts.scripts.features import FeaturesExtractor
 
 #imports for text summarization
-from check4facts.scripts.text_sum.llm_request import invoke_local_llm
+from check4facts.scripts.text_sum.local_llm import invoke_local_llm
 from check4facts.scripts.text_sum.text_process import text_to_bulleted_list
 from check4facts.scripts.text_sum.groq_api import groq_api
 
@@ -253,17 +253,23 @@ def summarize_text(self, user_input, article_id):
     except ValueError:
         print("Error: article_id is not an integer")
 
-    # Try invoking the groq_api to generate a summary
-    api = groq_api()
-    answer = api.run(user_input)
+    answer = None
+
+    # Try invoking the groq_api to generate a summary, if the text is suitable 
+    if len(user_input.split()) <= 1900:
+        api = groq_api()
+        answer = api.run(user_input)
+
 
     # If the invoking fails, or the input is too large, call the local implementation
-    if answer['response'] is None or len(user_input.split()) >= 1900:
+    if answer['response'] is None:
         result = invoke_local_llm(user_input, article_id)
+        result['timestamp'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         return result
+        
     else:
         return {"summarization": text_to_bulleted_list(answer['response']), "time": answer['elapsed_time'], 
-                "article_id": article_id}
+                "article_id": article_id, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
 
 
 
