@@ -1,5 +1,5 @@
 
-from check4facts.text_sum_scripts.translate import *
+from check4facts.scripts.text_sum.translate import *
 import numpy as np
 from spacy.lang.el import Greek
 nlp = Greek()

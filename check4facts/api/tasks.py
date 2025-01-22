@@ -12,9 +12,9 @@ from check4facts.scripts.search import SearchEngine
 from check4facts.scripts.features import FeaturesExtractor
 
 #imports for text summarization
-from check4facts.text_sum_scripts.llm_request import invoke_local_llm
-from check4facts.text_sum_scripts.text_process import text_to_bulleted_list
-from check4facts.text_sum_scripts.groq_api import groq_api
+from check4facts.scripts.text_sum.llm_request import invoke_local_llm
+from check4facts.scripts.text_sum.text_process import text_to_bulleted_list
+from check4facts.scripts.text_sum.groq_api import groq_api
 
 
 db_path = os.path.join(DirConf.CONFIG_DIR, 'db_config.yml')  # while using uwsgi
@@ -242,8 +242,8 @@ def intial_train_task(self):
 
 
 
-@shared_task
-def summarize_text(user_input, article_id):
+@shared_task(bind=True, ignore_result=False)
+def summarize_text(self, user_input, article_id):
 
     # Check if text is valid
     if len(user_input.split()) < 5:
@@ -267,15 +267,15 @@ def summarize_text(user_input, article_id):
 
 
 
-@shared_task
-def celery_insert(task_id):
+@shared_task(bind=True, ignore_result=False)
+def celery_insert(self, task_id):
     dbh.connect()
     dbh.insert_summary(task_id)
     dbh.disconnect()
     
 
-@shared_task
-def celery_get_task_result(task_id):
+@shared_task(bind=True, ignore_result=False)
+def celery_get_task_result(self, task_id):
     dbh.connect()
     result = dbh.get_successful_task_result(task_id)
     dbh.disconnect()
