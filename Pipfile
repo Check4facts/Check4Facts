@@ -33,6 +33,7 @@ morfessor = "*"
 lxml = "*"
 deep-translator = "*"
 langchain-groq = "*"
+python-dotenv = "*"
 
 [requires]
 python_version = "3.10"

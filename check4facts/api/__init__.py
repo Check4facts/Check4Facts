@@ -1,5 +1,6 @@
 import os
 import time
+from flask.cli import load_dotenv
 import yaml
 from celery import Celery, Task
 from flask_cors import CORS
@@ -9,6 +10,7 @@ from check4facts.api.tasks import (
     analyze_task,
     train_task,
     intial_train_task,
+    summarize_text,
 )
 from check4facts.config import DirConf
 from check4facts.database import DBHandler
@@ -16,6 +18,8 @@ from check4facts.database import DBHandler
 """
 This is responsible for creating the API layer app for our python module Check4Facts
 """
+
+load_dotenv(path="../../.env")
 
 
 def celery_init_app(app: Flask) -> Celery:
@@ -36,8 +40,8 @@ def create_app() -> Flask:
     CORS(app)
     app.config.from_mapping(
         CELERY=dict(
-            broker_url="sqla+postgresql://check4facts@localhost:5432/check4facts",
-            result_backend="db+postgresql://check4facts@localhost:5432/check4facts",
+            broker_url=os.getenv("CELERY_BROKER_URL"),
+            result_backend=os.getenv("CELERY_RESULT_BACKEND"),
             task_ignore_result=True,
         ),
     )
@@ -118,6 +122,28 @@ def create_app() -> Flask:
             )
 
         return jsonify(response)
+
+    @app.route("/summarize", methods=["POST"])
+    def get_sum():
+        data = request.get_json()
+        user_input = data.get("text", "").strip()
+        article_id = data.get("article_id", 9999)
+
+        if not user_input:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": 'Text is empty. Please provide the "text" field in your JSON.',
+                    }
+                ),
+                400,
+            )
+
+        task = summarize_text.apply_async(
+            kwargs={"user_input": user_input, "article_id": article_id}
+        )
+        return jsonify({"task_id": task.id}), 202
 
     return app
 
