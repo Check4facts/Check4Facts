@@ -219,7 +219,7 @@ def intial_train_task(self):
         )
 
     print(f"Initiating model training.")
-    path = os.path.join(DirConf.CONFIG_DIR, cmd_args.train_settings)
+    path = os.path.join(DirConf.CONFIG_DIR, "train_config.yml")
     with open(path, "r") as f:
         train_params = yaml.safe_load(f)
     t = Trainer(**train_params)
