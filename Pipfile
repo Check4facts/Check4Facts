@@ -31,6 +31,8 @@ pyicu = "*"
 pycld2 = "*"
 morfessor = "*"
 lxml = "*"
+deep-translator = "*"
+langchain-groq = "*"
 
 [requires]
 python_version = "3.10"
