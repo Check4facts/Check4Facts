@@ -1,7 +1,7 @@
 import numpy as np
 import psycopg2
 from psycopg2.extensions import register_adapter, AsIs
-
+import pickle
 
 def adapt_numpy_float64(numpy_float64):
     return AsIs(numpy_float64)
@@ -303,3 +303,125 @@ class DBHandler:
         finally:
             if conn is not None: conn.close()
             return res
+
+
+    #added extra functions for text summarization handling
+ 
+
+    def connect(self):
+        try:
+            
+            self.connection = psycopg2.connect(**self.conn_params)
+    
+            self.cursor = self.connection.cursor()
+        
+            self.cursor.execute("SELECT version();")
+            
+            db_version = self.cursor.fetchone()
+            print(f"Connected to: {db_version}")
+    
+        except Exception as e:
+            print(f"Error: {e}")
+
+    def disconnect(self):
+        if self.connection:
+            self.cursor.close()
+            self.connection.close()
+            print("Connection closed.")   
+        else:
+            print("Unable to close connection. Is the connection already closed?")
+    
+    def insert_summary(self, task_id):
+        if not self.connection:
+            print("Please connect to the database.")
+            return 
+        else:
+            try:
+                
+                task_result = self.get_successful_task_result(task_id)
+                if not task_result:
+                    print(f"Task result for task_id {task_id} is empty or None.")
+                    return
+                
+                article_id = task_result['article_id']
+                article_summary = task_result['summarization']
+
+                if not article_id or not article_summary:
+                    print(f"Invalid task result. Article ID or summary missing for task_id {task_id}.")
+                    return
+
+                
+                
+                self.cursor.execute("""
+                SELECT summary FROM article WHERE id = %s FOR UPDATE;""", (article_id,))
+                row = self.cursor.fetchone()
+                if row and row[0]:
+                    print("Summary already exists in the for this article_id. Deleting previous registrations...") 
+                    self.remove_summary_by_article_id(article_id)
+                
+                print('Inserting summary....')
+                query = """
+                UPDATE article SET summary = %s WHERE id = %s;
+                """
+                self.cursor.execute(query, (article_summary, article_id))
+                self.connection.commit()  
+                print(f"Summary with article id: {article_id} inserted successfully.")
+
+                
+            except Exception as e:
+                print(f"Error inserting summary: {e}")
+                self.connection.rollback() 
+
+
+
+
+    def remove_summary_by_article_id(self,article_id):
+        if not self.connection:
+            print("Please connect to the database.")
+            return 
+        else:
+            try:
+                
+                self.cursor.execute("""SELECT summary FROM article WHERE id = %s FOR UPDATE;""",
+                                     (article_id,))
+                
+                row  = self.cursor.fetchone()
+                if row: 
+                    query = """
+                    UPDATE article SET summary = NULL where id = %s;
+                """
+                    self.cursor.execute(query, (article_id,))
+                    self.connection.commit() 
+                    print(f"Summary with article id: {article_id} deleted successfully.")
+                else:
+                    print(f"Cannot delete summary for article id: {article_id}. Summary doesn't exist")
+                    self.connection.rollback()
+            except Exception as e:
+                print(f'Error deleting row: {e}')
+                self.connection.rollback()
+
+
+    def get_successful_task_result(self, task_id):
+      if not self.connection:
+            print("Please connect to the database.")
+            return 
+      try:
+          query = """
+            SELECT result 
+            FROM celery_taskmeta
+            WHERE task_id = %s AND status = 'SUCCESS';
+        """
+          self.cursor.execute(query, (task_id,))
+          row = self.cursor.fetchone()
+          if row:
+              result =  row[0]
+              
+              result_text =  pickle.loads(result)
+              return result_text
+          else:
+              print(f"Task ID {task_id} not found or not successful.")
+              self.connection.rollback()
+              return 
+      except Exception as e:
+          print(f"Error fetching task result: {e}")
+          self.connection.rollback()
