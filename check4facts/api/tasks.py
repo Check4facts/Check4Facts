@@ -265,7 +265,7 @@ def summarize_text(self, user_input, article_id):
     )
 
     # Try invoking the groq_api to generate a summary, if the text is suitable
-    if len(user_input.split()) >= 1900:
+    if len(user_input.split()) <= 1900:
         api = groq_api()
         answer = api.run(user_input)
         if not answer["response"]:
