@@ -436,28 +436,3 @@ class DBHandler:
             except Exception as e:
                 print(f"Error deleting row: {e}")
                 self.connection.rollback()
-
-    def get_successful_task_result(self, task_id):
-        if not self.connection:
-            print("Please connect to the database.")
-            return
-        try:
-            query = """
-            SELECT result 
-            FROM celery_taskmeta
-            WHERE task_id = %s AND status = 'SUCCESS';
-        """
-            self.cursor.execute(query, (task_id,))
-            row = self.cursor.fetchone()
-            if row:
-                result = row[0]
-
-                result_text = pickle.loads(result)
-                return result_text
-            else:
-                print(f"Task ID {task_id} not found or not successful.")
-                self.connection.rollback()
-                return
-        except Exception as e:
-            print(f"Error fetching task result: {e}")
-            self.connection.rollback()
