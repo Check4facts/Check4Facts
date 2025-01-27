@@ -65,6 +65,30 @@ class DBHandler:
         else:
             print("Unable to close connection. Is the connection already closed?")
 
+    def fetch_active_tasks_ids(self):
+        if not self.connection:
+            self.connect()
+
+        response = []
+        try:
+            sql = """
+                SELECT task_id
+                FROM celery_taskmeta
+                WHERE status = 'PROGRESS';
+            """
+            self.cursor.execute(sql)
+            rows = self.cursor.fetchall()
+
+            for row in rows:
+                response.append(row[0])
+
+        except Exception as e:
+            print(f"Error fetching active celery tasks: {e}")
+            self.connection.rollback()
+            return []
+
+        return response
+
     def insert_statement_resources(self, s_id, resource_records):
         conn = None
         sql1 = (

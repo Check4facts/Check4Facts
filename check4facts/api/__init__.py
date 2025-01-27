@@ -88,10 +88,6 @@ def create_app() -> Flask:
 
     @app.route("/intial-train", methods=["GET"])
     def initial_train():
-        db_path = os.path.join(DirConf.CONFIG_DIR, "db_config.yml")  # while using uwsgi
-        with open(db_path, "r") as db_f:
-            db_params = yaml.safe_load(db_f)
-        dbh = DBHandler(**db_params)
         total = dbh.count_statements()
 
         task = intial_train_task.apply_async()
@@ -128,6 +124,32 @@ def create_app() -> Flask:
             )
 
         return jsonify(response)
+
+    @app.route("/fetch-active-tasks", methods=["GET"])
+    def fetch_active_tasks():
+        try:
+            task_ids = dbh.fetch_active_tasks_ids()
+            response = []
+            for task_id in task_ids:
+                result = status_task(task_id)
+                response.append(
+                    {
+                        "taskId": task_id,
+                        "status": result.status,
+                        "taskInfo": result.info,
+                    }
+                )
+            return jsonify(response)
+        except Exception as e:
+            return (
+                jsonify(
+                    {
+                        "status": "ERROR",
+                        "message": f"Error fetch active celery tasks from database: {e}",
+                    }
+                ),
+                400,
+            )
 
     @app.route("/summarize", methods=["POST"])
     def get_sum():
