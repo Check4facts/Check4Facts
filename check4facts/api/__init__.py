@@ -22,6 +22,12 @@ This is responsible for creating the API layer app for our python module Check4F
 load_dotenv(path="../../.env")
 
 
+db_path = os.path.join(DirConf.CONFIG_DIR, "db_config.yml")  # while using uwsgi
+with open(db_path, "r") as db_f:
+    db_params = yaml.safe_load(db_f)
+dbh = DBHandler(**db_params)
+
+
 def celery_init_app(app: Flask) -> Celery:
     class FlaskTask(Task):
         def __call__(self, *args: object, **kwargs: object) -> object:

@@ -6,21 +6,14 @@ from celery import result, shared_task
 from check4facts.train import Trainer
 from check4facts.config import DirConf
 from check4facts.predict import Predictor
-from check4facts.database import DBHandler
 from check4facts.scripts.harvest import Harvester
 from check4facts.scripts.search import SearchEngine
 from check4facts.scripts.features import FeaturesExtractor
 
-#imports for text summarization
+# imports for text summarization
 from check4facts.scripts.text_sum.local_llm import invoke_local_llm
 from check4facts.scripts.text_sum.text_process import text_to_bulleted_list
 from check4facts.scripts.text_sum.groq_api import groq_api
-
-
-db_path = os.path.join(DirConf.CONFIG_DIR, 'db_config.yml')  # while using uwsgi
-with open(db_path, 'r') as db_f:
-    db_params = yaml.safe_load(db_f)
-dbh = DBHandler(**db_params)
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -30,6 +23,7 @@ def status_task(self, task_id):
 
 @shared_task(bind=True, ignore_result=False)
 def analyze_task(self, statement):
+    from check4facts.api import dbh
     statement_id = statement.get("id")
     statement_text = statement.get("text")
 
@@ -108,6 +102,7 @@ def analyze_task(self, statement):
 
 @shared_task(bind=True, ignore_result=False)
 def train_task(self):
+    from check4facts.api import dbh
     self.update_state(
         state="PROGRESS", meta={"current": 1, "total": 2, "type": "TRAIN"}
     )
@@ -133,6 +128,7 @@ def train_task(self):
 
 @shared_task(bind=True, ignore_result=False)
 def intial_train_task(self):
+    from check4facts.api import dbh
     # Initialize all python modules.
     path = os.path.join(DirConf.CONFIG_DIR, "search_config.yml")  # when using uwsgi.
     with open(path, "r") as f:
@@ -234,12 +230,10 @@ def intial_train_task(self):
     fname = t.best_model["clf"] + "_" + time.strftime("%Y-%m-%d-%H:%M") + ".joblib"
     path = os.path.join(DirConf.MODELS_DIR, fname)
     t.save_best_model(path)
-    print(f'Successfully saved the best model.')
+    print(f"Successfully saved the best model.")
 
 
-#Tasks for text summarization
-
-
+# Tasks for text summarization
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -255,34 +249,37 @@ def summarize_text(self, user_input, article_id):
 
     answer = None
 
-    # Try invoking the groq_api to generate a summary, if the text is suitable 
+    # Try invoking the groq_api to generate a summary, if the text is suitable
     if len(user_input.split()) <= 1900:
         api = groq_api()
         answer = api.run(user_input)
 
-
     # If the invoking fails, or the input is too large, call the local implementation
-    if answer['response'] is None:
+    if answer["response"] is None:
         result = invoke_local_llm(user_input, article_id)
-        result['timestamp'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        result["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        print(result)
         return result
-        
+
     else:
-        return {"summarization": text_to_bulleted_list(answer['response']), "time": answer['elapsed_time'], 
-                "article_id": article_id, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+        return {
+            "summarization": text_to_bulleted_list(answer["response"]),
+            "time": answer["elapsed_time"],
+            "article_id": article_id,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        }
 
 
+# @shared_task(bind=True, ignore_result=False)
+# def celery_insert(self, task_id):
+#     dbh.connect()
+#     dbh.insert_summary(task_id)
+#     dbh.disconnect()
 
-@shared_task(bind=True, ignore_result=False)
-def celery_insert(self, task_id):
-    dbh.connect()
-    dbh.insert_summary(task_id)
-    dbh.disconnect()
-    
 
-@shared_task(bind=True, ignore_result=False)
-def celery_get_task_result(self, task_id):
-    dbh.connect()
-    result = dbh.get_successful_task_result(task_id)
-    dbh.disconnect()
-    return result
+# @shared_task(bind=True, ignore_result=False)
+# def celery_get_task_result(self, task_id):
+#     dbh.connect()
+#     result = dbh.get_successful_task_result(task_id)
+#     dbh.disconnect()
+#     return result
