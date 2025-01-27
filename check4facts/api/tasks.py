@@ -24,6 +24,7 @@ def status_task(self, task_id):
 @shared_task(bind=True, ignore_result=False)
 def analyze_task(self, statement):
     from check4facts.api import dbh
+
     statement_id = statement.get("id")
     statement_text = statement.get("text")
 
@@ -38,7 +39,8 @@ def analyze_task(self, statement):
     statements = [statement_text]
 
     self.update_state(
-        state="PROGRESS", meta={"current": 1, "total": 4, "type": f"{statement_id}"}
+        state="PROGRESS",
+        meta={"current": 1, "total": 4, "type": f"ANALYZE_{statement_id}"},
     )
     # Using first element only for the result cause only one statement is being checked.
     search_results = se.run(statements)[0]
@@ -52,7 +54,8 @@ def analyze_task(self, statement):
     ]
 
     self.update_state(
-        state="PROGRESS", meta={"current": 2, "total": 4, "type": f"{statement_id}"}
+        state="PROGRESS",
+        meta={"current": 2, "total": 4, "type": f"ANALYZE_{statement_id}"},
     )
     # Using first element only for the result cause only one statement is being checked.
     harvest_results = h.run(articles)[0]
@@ -72,7 +75,8 @@ def analyze_task(self, statement):
     ]
 
     self.update_state(
-        state="PROGRESS", meta={"current": 3, "total": 4, "type": f"{statement_id}"}
+        state="PROGRESS",
+        meta={"current": 3, "total": 4, "type": f"ANALYZE_{statement_id}"},
     )
     features_results = fe.run(statement_dicts)[0]
 
@@ -85,7 +89,8 @@ def analyze_task(self, statement):
         p = Predictor(**predict_params)
 
         self.update_state(
-            state="PROGRESS", meta={"current": 4, "total": 4, "type": f"{statement_id}"}
+            state="PROGRESS",
+            meta={"current": 4, "total": 4, "type": f"ANALYZE_{statement_id}"},
         )
         predict_result = p.run([features_results]).loc[0, ["pred_0", "pred_1"]].values
 
@@ -103,6 +108,7 @@ def analyze_task(self, statement):
 @shared_task(bind=True, ignore_result=False)
 def train_task(self):
     from check4facts.api import dbh
+
     self.update_state(
         state="PROGRESS", meta={"current": 1, "total": 2, "type": "TRAIN"}
     )
@@ -129,6 +135,7 @@ def train_task(self):
 @shared_task(bind=True, ignore_result=False)
 def intial_train_task(self):
     from check4facts.api import dbh
+
     # Initialize all python modules.
     path = os.path.join(DirConf.CONFIG_DIR, "search_config.yml")  # when using uwsgi.
     with open(path, "r") as f:
@@ -248,16 +255,33 @@ def summarize_text(self, user_input, article_id):
         print("Error: article_id is not an integer")
 
     answer = None
+    self.update_state(
+        state="PROGRESS",
+        meta={
+            "current": 1,
+            "total": 2,
+            "type": "SUMMARIZE",
+        },
+    )
 
     # Try invoking the groq_api to generate a summary, if the text is suitable
-    if len(user_input.split()) <= 1900:
+    if len(user_input.split()) >= 1900:
         api = groq_api()
         answer = api.run(user_input)
-        if not answer['response']:
+        if not answer["response"]:
             answer = None
 
+    self.update_state(
+        state="PROGRESS",
+        meta={
+            "current": 2,
+            "total": 2,
+            "type": "SUMMARIZE",
+        },
+    )
+
     # If the invoking fails, or the input is too large, call the local implementation
-    if answer is None or len(user_input.split())>1900:
+    if answer is None or len(user_input.split()) > 1900:
         result = invoke_local_llm(user_input, article_id)
         result["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         print(result)
@@ -270,18 +294,3 @@ def summarize_text(self, user_input, article_id):
             "article_id": article_id,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
         }
-
-
-# @shared_task(bind=True, ignore_result=False)
-# def celery_insert(self, task_id):
-#     dbh.connect()
-#     dbh.insert_summary(task_id)
-#     dbh.disconnect()
-
-
-# @shared_task(bind=True, ignore_result=False)
-# def celery_get_task_result(self, task_id):
-#     dbh.connect()
-#     result = dbh.get_successful_task_result(task_id)
-#     dbh.disconnect()
-#     return result
