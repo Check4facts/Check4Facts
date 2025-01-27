@@ -253,9 +253,11 @@ def summarize_text(self, user_input, article_id):
     if len(user_input.split()) <= 1900:
         api = groq_api()
         answer = api.run(user_input)
+        if not answer['response']:
+            answer = None
 
     # If the invoking fails, or the input is too large, call the local implementation
-    if answer["response"] is None:
+    if answer is None or len(user_input.split())>1900:
         result = invoke_local_llm(user_input, article_id)
         result["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         print(result)
