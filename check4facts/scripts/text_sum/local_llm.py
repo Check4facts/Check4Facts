@@ -40,6 +40,7 @@ def invoke_local_llm(text, article_id):
         return {"error": "Invalid article_id"} 
 
     start_time = time.time()
+    print('Invoking local llm...')
     text = translate_long_text(text, src_lang='el', target_lang='en')
     summary = generate_summary(text)
    
@@ -47,9 +48,17 @@ def invoke_local_llm(text, article_id):
     result_sum = translate_long_text(summary,src_lang='en', target_lang='el')
     elapsed_time = np.round(end_time-start_time,2)
 
-    bulleted_list = text_to_bulleted_list(result_sum)
+    bulleted_list = text_to_bullet_list(result_sum)
+
+    print(bulleted_list)
     
+    bulleted_list = bullet_to_html_list(bulleted_list)
+
+    print(bulleted_list)
+
     bulleted_list = capitalize_bullets(bulleted_list)
+
+    print(bulleted_list)
 
     return {"summarization": bulleted_list, "time": elapsed_time, "article_id": article_id}
 

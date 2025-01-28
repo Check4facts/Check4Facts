@@ -8,19 +8,32 @@ nlp.add_pipe("sentencizer")
 
 
 
-def text_to_bulleted_list(text):
+def text_to_bullet_list(text):
     doc = nlp(text)
     sentences = [sent.text.strip() for sent in doc.sents]
+    bulleted_list = "\n".join([f"• {sentence}" for sentence in sentences])
+    return bulleted_list
 
-    html_bulleted_list = "<ul><br>" + "<br>".join(
-        [
-            f"<li>{sentence.replace('*', '')}</li>" 
-            for sentence in sentences 
-            if len(sentence.split()) >= 4 and sentence[-1].strip() in [';', '!', ',', '.', '"', '»', '>', '?']
-        ]
-    ) + "<br></ul>"
+def bullet_to_html_list(text):
+    if isinstance(text, tuple):  # If it's a tuple, get the first element
+        text = text[0]
+    elif not isinstance(text, str):  # Handle other unexpected types
+        raise ValueError("Input must be a string or a tuple containing a string")
+    # Split the input text by '•' to get individual bullet points
+    bullet_points = re.split(r'[•*-]\s*', text)
+    
+    # Remove any leading or trailing spaces from each bullet point
+    bullet_points = [point.strip() for point in bullet_points if point.strip()]
 
-    return html_bulleted_list
+    
+    # Generate the HTML format for the bulleted list
+    html_list = "<ul>"
+    for point in bullet_points:
+        if 'μια περίληψη' not in point:
+            html_list += f"<li>{point}</li><br>"
+    html_list += "</ul>"
+    
+    return html_list
 
 
 def capitalize_bullets(text):

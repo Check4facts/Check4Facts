@@ -13,7 +13,7 @@ from check4facts.scripts.features import FeaturesExtractor
 
 #imports for text summarization
 from check4facts.scripts.text_sum.local_llm import invoke_local_llm
-from check4facts.scripts.text_sum.text_process import text_to_bulleted_list
+from check4facts.scripts.text_sum.text_process import text_to_bullet_list, bullet_to_html_list
 from check4facts.scripts.text_sum.groq_api import groq_api
 
 
@@ -254,24 +254,27 @@ def summarize_text(self, user_input, article_id):
         print("Error: article_id is not an integer")
 
     answer = None
+    api = groq_api()
 
-    # Try invoking the groq_api to generate a summary, if the text is suitable 
-    if len(user_input.split()) <= 1900:
-        api = groq_api()
+    #Try invoking the groq_api to generate a summary, if the text is suitable 
+    if api:
         answer = api.run(user_input)
-        if not answer['response']:
-            answer = None
-
-
-    # If the invoking fails, or the input is too large, call the local implementation
-    if answer is None or len(user_input.split())>1900:
-        result = invoke_local_llm(user_input, article_id)
-        result['timestamp'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        return result
-        
-    else:
-        return {"summarization": text_to_bulleted_list(answer['response']), "time": answer['elapsed_time'], 
+        if answer is not None:
+            if(len(user_input.split()) >=1800):
+                return {"summarization": bullet_to_html_list(answer['response']), "time": answer['elapsed_time'], 
                 "article_id": article_id, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+            
+                # return {"summarization": text_to_bulleted_list(answer), "time": answer['elapsed_time'], 
+                # "article_id": article_id, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+            else:
+                return {"summarization": bullet_to_html_list(answer['response']), "time": answer['elapsed_time'], 
+                 "article_id": article_id, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+        else:
+            result = invoke_local_llm(user_input, article_id)
+            result['timestamp'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            return result
+        
+
 
 
 
