@@ -178,7 +178,10 @@ def create_app() -> Flask:
     def get_summ(article_id):
 
         task = summarize_text2.apply_async(kwargs={"article_id": article_id})
-        return jsonify({"task_id": task.id}), 202
+        return (
+            jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
+            202,
+        )
 
     return app
 
