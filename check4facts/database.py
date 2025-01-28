@@ -383,80 +383,80 @@ class DBHandler:
                 conn.close()
             return res
 
+    def fetch_article_content(self, article_id):
+        if not self.connection:
+            self.connect()
+
+        try:
+            sql = f"""
+                SELECT a.content
+                FROM article a
+                WHERE a.id = {article_id};
+            """
+            self.cursor.execute(sql)
+            result = self.cursor.fetchone()[0]
+            return result
+
+        except Exception as e:
+            print(f"Error fetching content from article: {e}")
+            self.connection.rollback()
+
     # added extra functions for text summarization handling
 
-    def insert_summary(self, task_id):
+    def insert_summary(self, article_id, article_summary):
         if not self.connection:
-            print("Please connect to the database.")
-            return
-        else:
-            try:
+            self.connect()
 
-                task_result = self.get_successful_task_result(task_id)
-                if not task_result:
-                    print(f"Task result for task_id {task_id} is empty or None.")
-                    return
+        try:
 
-                article_id = task_result["article_id"]
-                article_summary = task_result["summarization"]
-
-                if not article_id or not article_summary:
-                    print(
-                        f"Invalid task result. Article ID or summary missing for task_id {task_id}."
-                    )
-                    return
-
-                self.cursor.execute(
-                    """
-                SELECT summary FROM article WHERE id = %s FOR UPDATE;""",
-                    (article_id,),
-                )
-                row = self.cursor.fetchone()
-                if row and row[0]:
-                    print(
-                        "Summary already exists in the for this article_id. Deleting previous registrations..."
-                    )
-                    self.remove_summary_by_article_id(article_id)
-
-                print("Inserting summary....")
-                query = """
-                UPDATE article SET summary = %s WHERE id = %s;
+            self.cursor.execute(
                 """
-                self.cursor.execute(query, (article_summary, article_id))
-                self.connection.commit()
-                print(f"Summary with article id: {article_id} inserted successfully.")
+            SELECT summary FROM article WHERE id = %s FOR UPDATE;""",
+                (article_id,),
+            )
+            row = self.cursor.fetchone()
+            if row and row[0]:
+                print(
+                    "Summary already exists in the for this article_id. Deleting previous registrations..."
+                )
+                self.remove_summary_by_article_id(article_id)
 
-            except Exception as e:
-                print(f"Error inserting summary: {e}")
-                self.connection.rollback()
+            print("Inserting summary....")
+            query = """
+            UPDATE article SET summary = %s WHERE id = %s;
+            """
+            self.cursor.execute(query, (article_summary, article_id))
+            self.connection.commit()
+            print(f"Summary with article id: {article_id} inserted successfully.")
+
+        except Exception as e:
+            print(f"Error inserting summary: {e}")
+            self.connection.rollback()
 
     def remove_summary_by_article_id(self, article_id):
         if not self.connection:
-            print("Please connect to the database.")
-            return
-        else:
-            try:
+            self.connect()
 
-                self.cursor.execute(
-                    """SELECT summary FROM article WHERE id = %s FOR UPDATE;""",
-                    (article_id,),
+        try:
+
+            self.cursor.execute(
+                """SELECT summary FROM article WHERE id = %s FOR UPDATE;""",
+                (article_id,),
+            )
+
+            row = self.cursor.fetchone()
+            if row:
+                query = """
+                UPDATE article SET summary = NULL where id = %s;
+            """
+                self.cursor.execute(query, (article_id,))
+                self.connection.commit()
+                print(f"Summary with article id: {article_id} deleted successfully.")
+            else:
+                print(
+                    f"Cannot delete summary for article id: {article_id}. Summary doesn't exist"
                 )
-
-                row = self.cursor.fetchone()
-                if row:
-                    query = """
-                    UPDATE article SET summary = NULL where id = %s;
-                """
-                    self.cursor.execute(query, (article_id,))
-                    self.connection.commit()
-                    print(
-                        f"Summary with article id: {article_id} deleted successfully."
-                    )
-                else:
-                    print(
-                        f"Cannot delete summary for article id: {article_id}. Summary doesn't exist"
-                    )
-                    self.connection.rollback()
-            except Exception as e:
-                print(f"Error deleting row: {e}")
                 self.connection.rollback()
+        except Exception as e:
+            print(f"Error deleting row: {e}")
+            self.connection.rollback()
