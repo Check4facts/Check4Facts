@@ -36,6 +36,9 @@ pycld2 = "*"
 polyglot = "*"
 tika = "*"
 uwsgi = "*"
+langchain-core = "*"
+langchain-text-splitters = "*"
+langchain = "*"
 
 [requires]
 python_version = "3.10"
