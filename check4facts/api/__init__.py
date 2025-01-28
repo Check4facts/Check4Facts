@@ -11,6 +11,7 @@ from check4facts.api.tasks import (
     train_task,
     intial_train_task,
     summarize_text,
+    summarize_text2,
 )
 from check4facts.config import DirConf
 from check4facts.database import DBHandler
@@ -20,6 +21,12 @@ This is responsible for creating the API layer app for our python module Check4F
 """
 
 load_dotenv(path="../../.env")
+
+
+db_path = os.path.join(DirConf.CONFIG_DIR, "db_config.yml")  # while using uwsgi
+with open(db_path, "r") as db_f:
+    db_params = yaml.safe_load(db_f)
+dbh = DBHandler(**db_params)
 
 
 def celery_init_app(app: Flask) -> Celery:
@@ -82,10 +89,6 @@ def create_app() -> Flask:
 
     @app.route("/intial-train", methods=["GET"])
     def initial_train():
-        db_path = os.path.join(DirConf.CONFIG_DIR, "db_config.yml")  # while using uwsgi
-        with open(db_path, "r") as db_f:
-            db_params = yaml.safe_load(db_f)
-        dbh = DBHandler(**db_params)
         total = dbh.count_statements()
 
         task = intial_train_task.apply_async()
@@ -123,6 +126,32 @@ def create_app() -> Flask:
 
         return jsonify(response)
 
+    @app.route("/fetch-active-tasks", methods=["GET"])
+    def fetch_active_tasks():
+        try:
+            task_ids = dbh.fetch_active_tasks_ids()
+            response = []
+            for task_id in task_ids:
+                result = status_task(task_id)
+                response.append(
+                    {
+                        "taskId": task_id,
+                        "status": result.status,
+                        "taskInfo": result.info,
+                    }
+                )
+            return jsonify(response)
+        except Exception as e:
+            return (
+                jsonify(
+                    {
+                        "status": "ERROR",
+                        "message": f"Error fetch active celery tasks from database: {e}",
+                    }
+                ),
+                400,
+            )
+
     @app.route("/summarize", methods=["POST"])
     def get_sum():
         data = request.get_json()
@@ -144,6 +173,15 @@ def create_app() -> Flask:
             kwargs={"user_input": user_input, "article_id": article_id}
         )
         return jsonify({"task_id": task.id}), 202
+
+    @app.route("/summarize/<article_id>", methods=["GET"])
+    def get_summ(article_id):
+
+        task = summarize_text2.apply_async(kwargs={"article_id": article_id})
+        return (
+            jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
+            202,
+        )
 
     return app
 
