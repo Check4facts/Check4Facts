@@ -12,7 +12,9 @@ from check4facts.scripts.features import FeaturesExtractor
 
 # imports for text summarization
 from check4facts.scripts.text_sum.local_llm import invoke_local_llm
-from check4facts.scripts.text_sum.text_process import text_to_bullet_list, bullet_to_html_list
+from check4facts.scripts.text_sum.text_process import (
+    bullet_to_html_list,
+)
 from check4facts.scripts.text_sum.groq_api import groq_api
 
 
@@ -244,54 +246,7 @@ def intial_train_task(self):
 
 
 @shared_task(bind=True, ignore_result=False)
-def summarize_text(self, user_input, article_id):
-
-    # Check if text is valid
-    if len(user_input.split()) < 5:
-        return {"error": "Please enter a valid text"}
-    try:
-        article_id = int(article_id)
-    except ValueError:
-        print("Error: article_id is not an integer")
-
-    answer = None
-    api = groq_api()
-
-    self.update_state(
-        state="PROGRESS",
-        meta={
-            "current": 2,
-            "total": 2,
-            "type": "SUMMARIZE",
-        },)
-
-    #Try invoking the groq_api to generate a summary, if the text is suitable 
-    if api:
-        answer = api.run(user_input)
-        if answer is not None:
-            if(len(user_input.split()) >=1800):
-                return {"summarization": bullet_to_html_list(answer['response']), "time": answer['elapsed_time'], 
-                "article_id": article_id, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-            else:
-                return {"summarization": bullet_to_html_list(answer['response']), "time": answer['elapsed_time'], 
-                 "article_id": article_id, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-        else:
-            result = invoke_local_llm(user_input, article_id)
-            result['timestamp'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            return result
-        
-    self.update_state(
-        state="PROGRESS",
-        meta={
-            "current": 1,
-            "total": 2,
-            "type": "SUMMARIZE",
-        },)
-
-
-#to be resolved
-@shared_task(bind=True, ignore_result=False)
-def summarize_text2(self, article_id):
+def summarize_text(self, article_id):
     from check4facts.api import dbh
 
     try:
@@ -307,34 +262,36 @@ def summarize_text2(self, article_id):
             },
         )
 
-      
         api = groq_api()
         answer = api.run(content)
         if api:
             answer = api.run(content)
             if answer is not None:
-                if(len(content.split()) >=1800):
-                    result = {"summarization": bullet_to_html_list(answer['response']), "time": answer['elapsed_time'], 
-                    "article_id": article_id, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+                if len(content.split()) >= 1800:
+                    result = {
+                        "summarization": bullet_to_html_list(answer["response"]),
+                        "time": answer["elapsed_time"],
+                        "article_id": article_id,
+                        "timestamp": time.strftime(
+                            "%Y-%m-%d %H:%M:%S", time.localtime()
+                        ),
+                    }
                 else:
-                    result = {"summarization": bullet_to_html_list(answer['response']), "time": answer['elapsed_time'], 
-                    "article_id": article_id, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+                    result = {
+                        "summarization": bullet_to_html_list(answer["response"]),
+                        "time": answer["elapsed_time"],
+                        "article_id": article_id,
+                        "timestamp": time.strftime(
+                            "%Y-%m-%d %H:%M:%S", time.localtime()
+                        ),
+                    }
         else:
             result = invoke_local_llm(content, article_id)
-            result['timestamp'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            
+            result["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
-        # result = {}
-        # # If the invoking fails, or the input is too large, call the local implementation
-        # if answer is None or len(content.split()) > 1800:
-        #     result = invoke_local_llm(content, article_id)
-        #     result["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        # else:
-        #     result["summarization"] = bullet_to_html_list(answer["response"])
-        #     result["time"] = answer["elapsed_time"]
-        #     result["article_id"] = article_id
-        #     result["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        print(f"Finished generating summary in: {result['time']} seconds. Storing in database...")
+        print(
+            f"Finished generating summary in: {result['time']} seconds. Storing in database..."
+        )
 
         self.update_state(
             state="PROGRESS",
@@ -345,5 +302,6 @@ def summarize_text2(self, article_id):
             },
         )
         dbh.insert_summary(article_id, result["summarization"])
+        dbh.disconnect()
     except Exception as e:
         print(f"Error generating summary for article with id {article_id}: {e}")

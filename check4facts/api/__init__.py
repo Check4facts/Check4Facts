@@ -11,7 +11,6 @@ from check4facts.api.tasks import (
     train_task,
     intial_train_task,
     summarize_text,
-    summarize_text2,
 )
 from check4facts.config import DirConf
 from check4facts.database import DBHandler
@@ -152,32 +151,10 @@ def create_app() -> Flask:
                 400,
             )
 
-    @app.route("/summarize", methods=["POST"])
-    def get_sum():
-        data = request.get_json()
-        user_input = data.get("text", "").strip()
-        article_id = data.get("article_id", 9999)
-
-        if not user_input:
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "message": 'Text is empty. Please provide the "text" field in your JSON.',
-                    }
-                ),
-                400,
-            )
-
-        task = summarize_text.apply_async(
-            kwargs={"user_input": user_input, "article_id": article_id}
-        )
-        return jsonify({"task_id": task.id}), 202
-
     @app.route("/summarize/<article_id>", methods=["GET"])
     def get_summ(article_id):
 
-        task = summarize_text2.apply_async(kwargs={"article_id": article_id})
+        task = summarize_text.apply_async(kwargs={"article_id": article_id})
         return (
             jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
             202,
