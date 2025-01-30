@@ -11,7 +11,7 @@ from check4facts.scripts.search import SearchEngine
 from check4facts.scripts.features import FeaturesExtractor
 
 # imports for text summarization
-from check4facts.scripts.text_sum.local_llm import invoke_local_llm
+from check4facts.scripts.text_sum.local_llm import invoke_local_llm, google_llm
 from check4facts.scripts.text_sum.text_process import (
     bullet_to_html_list,
 )
@@ -286,8 +286,22 @@ def summarize_text(self, article_id):
                         ),
                     }
         else:
-            result = invoke_local_llm(content, article_id)
-            result["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            #invoke Gemini llm
+            answer = google_llm(content, article_id)
+            if answer:
+                result = {
+                            "summarization": answer["summarization"],
+                            "time": answer["elapsed_time"],
+                            "article_id": article_id,
+                            "timestamp": answer['timestamp']
+                        }
+            else:
+                result = invoke_local_llm(content, article_id)
+                
+
+
+
+            
 
         print(
             f"Finished generating summary in: {result['time']} seconds. Storing in database..."
