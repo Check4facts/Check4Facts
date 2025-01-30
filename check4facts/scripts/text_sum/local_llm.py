@@ -60,8 +60,54 @@ def invoke_local_llm(text, article_id):
 
     print(bulleted_list)
 
-    return {"summarization": bulleted_list, "time": elapsed_time, "article_id": article_id}
+    return {"summarization": bulleted_list, "time": elapsed_time, "article_id": article_id,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) }
 
 
 
+def google_llm(text, article_id):
+    import google.generativeai as genai
+    import os
+    from dotenv import load_dotenv
+    import logging
+    os.environ["GRPC_VERBOSITY"] = "none"
+    logging.getLogger("absl").setLevel(logging.CRITICAL)
+    logging.basicConfig(level=logging.ERROR)
+    load_dotenv()
+    api_key = os.getenv("API_KEY")
 
+    try:
+        article_id = int(article_id)
+    except ValueError:
+        print("Error: article_id is not an integer")
+        return None
+
+    if not api_key:
+        print("Error: article_id is not an integer")
+        return None
+
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        start_time = time.time()
+        text = translate_long_text(text, src_lang='el', target_lang='en')
+        response = model.generate_content(f'''In a short dashed list, summarize the following text. 
+                                        Do not make any commentary. Just provide the summary. Use at most 5 dashes.
+                                        The text to be summarized is presented below:
+                                        {text}''')
+        
+        text = translate_long_text(response.text, src_lang='en', target_lang='el')
+        #text = text_to_bullet_list(text)
+        text = bullet_to_html_list(text)
+
+        end_time = time.time()
+        
+        return {"summarization": text, 
+                "elapsed_time": np.round(end_time-start_time,2), "article_id": article_id, 
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+    except Exception as e:
+        print(f"Error occured during the Gemini model invokation: {e}")
+        return None
+
+
+    
