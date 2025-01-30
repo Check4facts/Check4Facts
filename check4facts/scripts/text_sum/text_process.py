@@ -3,10 +3,14 @@ from check4facts.scripts.text_sum.translate import *
 import numpy as np
 import re
 from spacy.lang.el import Greek
+from bs4 import BeautifulSoup
+
 nlp = Greek()
 nlp.add_pipe("sentencizer")
 
-
+def extract_text_from_html(html_string):
+    soup = BeautifulSoup(html_string, 'html.parser')
+    return soup.get_text(separator=' ', strip=True)
 
 def text_to_bullet_list(text):
     doc = nlp(text)
@@ -30,7 +34,7 @@ def bullet_to_html_list(text):
     html_list = "<ul>"
     for point in bullet_points:
         if 'μια περίληψη' not in point:
-            html_list += f"<li>{point}</li><br>"
+            html_list += f"<li>{point}</li>"
     html_list += "</ul>"
     
     return html_list

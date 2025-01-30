@@ -14,6 +14,7 @@ from check4facts.scripts.features import FeaturesExtractor
 from check4facts.scripts.text_sum.local_llm import invoke_local_llm
 from check4facts.scripts.text_sum.text_process import (
     bullet_to_html_list,
+    extract_text_from_html,
 )
 from check4facts.scripts.text_sum.groq_api import groq_api
 
@@ -261,6 +262,9 @@ def summarize_text(self, article_id):
                 "type": "SUMMARIZE",
             },
         )
+
+        # Keep only the actual text from the article's content
+        content = extract_text_from_html(content)
 
         api = groq_api()
         answer = api.run(content)
