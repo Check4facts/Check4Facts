@@ -97,7 +97,6 @@ def google_llm(text, article_id):
                                         {text}''')
         
         text = translate_long_text(response.text, src_lang='en', target_lang='el')
-        #text = text_to_bullet_list(text)
         text = bullet_to_html_list(text)
 
         end_time = time.time()
