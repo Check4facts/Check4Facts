@@ -24,21 +24,10 @@ def bullet_to_html_list(text):
         text = text[0]
     elif not isinstance(text, str): 
         raise ValueError("Input must be a string or a tuple containing a string")
-  
-    bullet_points = re.split(r'[•*-]\s*', text)
-    
 
-    bullet_points = [point.strip() for point in bullet_points if point.strip()]
-
-    
-    # Generate the HTML format for the bulleted list
-    html_list = "<ul>"
-    for point in bullet_points:
-        if 'μια περίληψη' not in point:
-            html_list += f"<li>{point}</li>"
-    html_list += "</ul>"
-    
-    return html_list
+    bullet_points = re.split(r'\s*•\s*', text)
+    bullet_points = [f"<li>{point.strip()}</li><br>" for point in bullet_points if point.strip()]
+    return "<ul>" + "".join(bullet_points) + "</ul>"
 
 
 def capitalize_bullets(text):

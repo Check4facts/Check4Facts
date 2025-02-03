@@ -3,6 +3,7 @@ from langchain_groq import ChatGroq
 import time
 import numpy as np
 from check4facts.scripts.text_sum.translate import translate_long_text
+from check4facts.scripts.text_sum.text_process import *
 
 
 
@@ -103,15 +104,19 @@ class groq_api:
         if ai_msg is None:
             print('Failed to produce result. Trying with the local llm next....')
             return None
+        
+        text = translate_long_text(ai_msg.content, src_lang='en', target_lang='el')
+        text = text_to_bullet_list(text)
+        text = bullet_to_html_list(text)
 
         return {
-            "response": translate_long_text(ai_msg.content, src_lang='en', target_lang='el'),
+            "response": text,
             "elapsed_time": np.round(time.time() - start_time, 2),
         }
     
 
     def summarize_long_text(self, llm, text):
-        
+        start_time = time.time()
         from langchain.prompts import PromptTemplate
         from langchain.chains.summarize import load_summarize_chain
         from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -167,7 +172,16 @@ class groq_api:
         print('FINAL SUMMARY: ')
         print(final_summary.content if hasattr(final_summary, 'content') else str(final_summary))
         result = final_summary.content if hasattr(final_summary, 'content') else str(final_summary)
-        return translate_long_text(result, src_lang='en', target_lang='el')
+
+        text = translate_long_text(result, src_lang='en', target_lang='el')
+        text = text_to_bullet_list(text)
+        text = bullet_to_html_list(text)
+        
+
+        return {
+            "response": text,
+            "elapsed_time": np.round(time.time() - start_time, 2),
+        }
 
 
 

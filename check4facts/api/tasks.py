@@ -13,7 +13,6 @@ from check4facts.scripts.features import FeaturesExtractor
 # imports for text summarization
 from check4facts.scripts.text_sum.local_llm import invoke_local_llm, google_llm
 from check4facts.scripts.text_sum.text_process import (
-    bullet_to_html_list,
     extract_text_from_html,
 )
 from check4facts.scripts.text_sum.groq_api import groq_api
@@ -266,46 +265,30 @@ def summarize_text(self, article_id):
         # Keep only the actual text from the article's content
         content = extract_text_from_html(content)
 
+        # try invoking the groq llm
         api = groq_api()
-        answer = api.run(content)
         if api:
             answer = api.run(content)
             if answer is not None:
-                if len(content.split()) >= 1800:
-                    result = {
-                        "summarization": bullet_to_html_list(answer["response"]),
-                        "time": answer["elapsed_time"],
-                        "article_id": article_id,
-                        "timestamp": time.strftime(
-                            "%Y-%m-%d %H:%M:%S", time.localtime()
-                        ),
-                    }
-                else:
-                    result = {
-                        "summarization": bullet_to_html_list(answer["response"]),
-                        "time": answer["elapsed_time"],
-                        "article_id": article_id,
-                        "timestamp": time.strftime(
-                            "%Y-%m-%d %H:%M:%S", time.localtime()
-                        ),
-                    }
-        else:
-            #invoke Gemini llm
+                result = {
+                    "summarization": answer["response"],
+                    "time": answer["elapsed_time"],
+                    "article_id": article_id,
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                }
+        if (not api) or (answer is None):
+            # invoke Gemini llm
             answer = google_llm(content, article_id)
             if answer:
                 result = {
-                            "summarization": answer["summarization"],
-                            "time": answer["elapsed_time"],
-                            "article_id": article_id,
-                            "timestamp": answer['timestamp']
-                        }
+                    "summarization": answer["summarization"],
+                    "time": answer["elapsed_time"],
+                    "article_id": article_id,
+                    "timestamp": answer["timestamp"],
+                }
             else:
+                # if everything fails, invoke the local model
                 result = invoke_local_llm(content, article_id)
-                
-
-
-
-            
 
         print(
             f"Finished generating summary in: {result['time']} seconds. Storing in database..."
