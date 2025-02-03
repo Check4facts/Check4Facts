@@ -262,30 +262,20 @@ def summarize_text(self, article_id):
             },
         )
 
+        #try invoking the groq llm 
         api = groq_api()
-        answer = api.run(content)
         if api:
             answer = api.run(content)
             if answer is not None:
-                if len(content.split()) >= 1800:
-                    result = {
-                        "summarization": bullet_to_html_list(answer["response"]),
+                result = {
+                        "summarization": answer["response"],
                         "time": answer["elapsed_time"],
                         "article_id": article_id,
                         "timestamp": time.strftime(
                             "%Y-%m-%d %H:%M:%S", time.localtime()
                         ),
                     }
-                else:
-                    result = {
-                        "summarization": bullet_to_html_list(answer["response"]),
-                        "time": answer["elapsed_time"],
-                        "article_id": article_id,
-                        "timestamp": time.strftime(
-                            "%Y-%m-%d %H:%M:%S", time.localtime()
-                        ),
-                    }
-        else:
+        if (not api) or (answer is None):
             #invoke Gemini llm
             answer = google_llm(content, article_id)
             if answer:
@@ -296,6 +286,7 @@ def summarize_text(self, article_id):
                             "timestamp": answer['timestamp']
                         }
             else:
+                #if everything fails, invoke the local model
                 result = invoke_local_llm(content, article_id)
                 
 
