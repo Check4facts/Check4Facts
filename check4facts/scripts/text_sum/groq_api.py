@@ -12,7 +12,7 @@ class groq_api:
     def __init__(self):
 
         self.llm = ChatGroq( 
-            model="llama3-70b-8192", 
+            model=os.getenv("GROQ_LLM_MODEL_1"), 
             temperature=0,
             max_tokens=None,
             timeout=None,
@@ -21,16 +21,15 @@ class groq_api:
         )
 
         self.llm_2 = ChatGroq(
-            model="deepseek-r1-distill-llama-70b",
+            model=os.getenv("GROQ_LLM_MODEL_2"),
             temperature=0,
             max_tokens=None,
             timeout=None,
             max_retries=1,
-            groq_api_key=os.getenv("GROQ_API_KEY_1"),
+            groq_api_key=os.getenv("GROQ_API_KEY_2"),
         )
 
-        self.key_1 = os.getenv("GROQ_API_KEY_1")
-        self.key_2 = os.getenv("GROQ_API_KEY_2")
+
 
     def run(self, text):
         max_retries = 10
@@ -49,12 +48,6 @@ class groq_api:
         ai_msg = None
 
         while retries < max_retries:
-
-            # alternate between api keys
-            if retries % 2 == 0:
-                os.environ["GROQ_API_KEY"] = self.key_1
-            else:
-                os.environ["GROQ_API_KEY"] = self.key_2
 
             # try to create an api call with the first llm
             try:
@@ -95,14 +88,15 @@ class groq_api:
                      
                      break
 
-                # if a second llm doesn't work either, alternate between api keys by increasing the #retries
+                # if a second llm doesn't work either, try increasing the #retries and wait 
                 except Exception as e:
                     print(f'Exception: {e}')
                     retries += 1
+                    time.sleep(5)
 
         # if no answer could be generated, return none and invoke the local llm
         if ai_msg is None:
-            print('Failed to produce result. Trying with the local llm next....')
+            print('Failed to produce result. Trying with the gemini llm next....')
             return None
         
         text = translate_long_text(ai_msg.content, src_lang='en', target_lang='el')
