@@ -58,7 +58,7 @@ class groq_api:
                     time.sleep(5)
                     ai_msg = self.summarize_long_text(self.llm, text)
                     return {
-                            "response": ai_msg,
+                            "response": ai_msg['response'],
                             "elapsed_time": np.round(time.time() - start_time, 2),
                         }
                 else:
@@ -79,7 +79,7 @@ class groq_api:
                          print('Summarizing text with the second LLM')
                          ai_msg = self.summarize_long_text(self.llm_2, text)
                          return {
-                            "response": ai_msg,
+                            "response": ai_msg['response'],
                             "elapsed_time": np.round(time.time() - start_time, 2),
                         }
                      else:
@@ -133,7 +133,7 @@ class groq_api:
         map_prompt = PromptTemplate.from_template(map_template)
 
        # Define the reduce template
-        reduce_template = """Summarize the following text in the form of a short bulleted list. Generate 5 bullets at most. 
+        reduce_template = """Summarize the following text in the form of a short bulleted list. Generate 5 bullets (•) at most. 
                          Keep the sentences and the list short and to the point. Do not make any commentary, just provide the summary.
                          Text to summarize: {docs}"""
         reduce_prompt = PromptTemplate.from_template(reduce_template)
