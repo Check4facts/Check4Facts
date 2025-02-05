@@ -306,3 +306,44 @@ def summarize_text(self, article_id):
         dbh.disconnect()
     except Exception as e:
         print(f"Error generating summary for article with id {article_id}: {e}")
+
+
+# Test tasks
+
+
+@shared_task(bind=True, ignore_result=False)
+def test_summarize_text(self, article_id, text):
+    try:
+        answer = None
+
+        # # Keep only the actual text from the article's content
+        # text = extract_text_from_html(text)
+
+        # try invoking the groq llm
+        api = groq_api()
+        if api:
+            answer = api.run(text)
+            if answer is not None:
+                result = {
+                    "summarization": answer["response"],
+                    "time": answer["elapsed_time"],
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                }
+        if (not api) or (answer is None):
+            # invoke Gemini llm
+            answer = google_llm(text, article_id)
+            if answer:
+                result = {
+                    "summarization": answer["summarization"],
+                    "time": answer["elapsed_time"],
+                    "timestamp": answer["timestamp"],
+                }
+            else:
+                # if everything fails, invoke the local model
+                result = invoke_local_llm(text, article_id)
+
+        print(f"Finished generating summary in: {result['time']} seconds")
+
+        return result
+    except:
+        print("An exception occurred")

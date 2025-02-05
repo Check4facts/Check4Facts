@@ -11,6 +11,7 @@ from check4facts.api.tasks import (
     train_task,
     intial_train_task,
     summarize_text,
+    test_summarize_text,
 )
 from check4facts.config import DirConf
 from check4facts.database import DBHandler
@@ -159,6 +160,19 @@ def create_app() -> Flask:
             jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
             202,
         )
+
+    # Test endpoints
+
+    @app.route("/test/summarize", methods=["POST"])
+    def test_get_summ():
+        json = request.json
+        article_id = json["article_id"]
+        text = json["text"]
+
+        result = test_summarize_text.apply_async(
+            kwargs={"article_id": article_id, "text": text}
+        )
+        return jsonify({"task_id": result.id, "status": result.status}), 200
 
     return app
 
