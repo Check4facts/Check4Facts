@@ -12,10 +12,15 @@ from check4facts.scripts.features import FeaturesExtractor
 
 # imports for text summarization
 from check4facts.scripts.text_sum.local_llm import invoke_local_llm
+from check4facts.scripts.text_sum.groq_api import groq_api
 from check4facts.scripts.text_sum.text_process import (
     bullet_to_html_list,
 )
-from check4facts.scripts.text_sum.groq_api import groq_api
+
+#imports for rag
+from check4facts.scripts.rag.pipeline import run_pipeline
+
+
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -305,3 +310,15 @@ def summarize_text(self, article_id):
         dbh.disconnect()
     except Exception as e:
         print(f"Error generating summary for article with id {article_id}: {e}")
+
+@shared_task(bind=False, ignore_result=False)
+def run_rag(article_id, claim, n):
+    try:
+        answer = run_pipeline(article_id, claim, n)
+        if answer:
+            return answer
+        else:
+            raise Exception("Pipeline returned empty result")
+
+    except Exception as e:
+        print(f'Error during rag run: {e}')

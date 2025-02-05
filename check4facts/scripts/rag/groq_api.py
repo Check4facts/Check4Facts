@@ -2,36 +2,37 @@ import os
 from langchain_groq import ChatGroq
 import time
 import numpy as np
-from check4facts.scripts.text_sum.translate import translate_long_text, translate
+from check4facts.scripts.rag.translate import *
 
 
 
-class groq_api:
+class groq_api():
 
-    def __init__(self):
+    def __init__(self, info, query):
 
-        self.llm = ChatGroq( 
-            model=os.getenv("GROQ_LLM_MODEL_1"), 
+        self.info = info
+        self.query = query
+
+        self.llm = ChatGroq(
+            
+            model= os.getenv('GROQ_LLM_MODEL_1'), #Note: changed the LLM invoke order for debugging
             temperature=0,
             max_tokens=None,
             timeout=None,
             max_retries=1,
-            groq_api_key=os.getenv("GROQ_API_KEY_1"),
-        )
-
+            api_key=os.getenv('GROQ_API_KEY_1'))
+        
         self.llm_2 = ChatGroq(
-            model=os.getenv("GROQ_LLM_MODEL_2"), 
+            model=os.getenv('GROQ_LLM_MODEL_2'),
             temperature=0,
             max_tokens=None,
             timeout=None,
             max_retries=1,
-            groq_api_key=os.getenv("GROQ_API_KEY_1"),
-        )
+            api_key=os.getenv('GROQ_API_KEY_2'))
+        
 
-        self.key_1 = os.getenv("GROQ_API_KEY_1")
-        self.key_2 = os.getenv("GROQ_API_KEY_2")
-
-    
+  
+        
     def run_api(self):
         max_retries = 10
         retries= 0

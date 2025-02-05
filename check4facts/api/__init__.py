@@ -11,6 +11,7 @@ from check4facts.api.tasks import (
     train_task,
     intial_train_task,
     summarize_text,
+    run_rag
 )
 from check4facts.config import DirConf
 from check4facts.database import DBHandler
@@ -155,6 +156,22 @@ def create_app() -> Flask:
     def get_summ(article_id):
 
         task = summarize_text.apply_async(kwargs={"article_id": article_id})
+        return (
+            jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
+            202,
+        )
+    
+    @app.route("/rag-test", methods=["POST"])
+    def get_rag():
+
+        data = request.get_json()
+        claim = data.get('text', '')
+        n = data.get('n', 3)
+        article_id = data.get('article_id',9999)
+        print(f"article_id: {article_id}, claim: {claim}, n: {n}")  # Debugging
+        
+
+        task = run_rag.apply_async(kwargs={"article_id": article_id, "claim": claim ,"n": n})
         return (
             jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
             202,
