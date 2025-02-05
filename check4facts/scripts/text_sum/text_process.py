@@ -16,7 +16,12 @@ def text_to_bullet_list(text):
     # doc = nlp(text)
     # sentences = [sent.text.strip() for sent in doc.sents]
     sentences = re.split(r'(?<=[.!?])\s+', text)
-    bulleted_list = "\n".join([f"• {sentence}" for sentence in sentences if "ακολουθεί μία περίληψη" not in sentence.lower()])
+    bulleted_list = "\n".join([
+    "• " + sentence.replace("*", "") 
+    for sentence in sentences 
+    if "ακολουθεί μία περίληψη" not in sentence.lower()
+])
+
     return bulleted_list
 
 def bullet_to_html_list(text):
