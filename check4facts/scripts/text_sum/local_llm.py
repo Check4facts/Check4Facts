@@ -59,7 +59,7 @@ def invoke_local_llm(text, article_id):
 
 
 
-def google_llm(text, article_id):
+def google_llm(article_id, text):
     import google.generativeai as genai
     import os
     from dotenv import load_dotenv
@@ -68,25 +68,31 @@ def google_llm(text, article_id):
     logging.getLogger("absl").setLevel(logging.CRITICAL)
     logging.basicConfig(level=logging.ERROR)
     load_dotenv()
-    api_key = os.getenv("API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    print(f"article_id: {article_id}, tex: {text[:100]}")
 
     try:
-        article_id = int(article_id)
+        if isinstance(article_id, str):
+            article_id = article_id.strip()  
+        article_id = int(article_id)  
     except ValueError:
         print("Error: article_id is not an integer")
         return None
 
+
     if not api_key:
-        print("Error: article_id is not an integer")
+        print("Error: invalid api key for gemini")
         return None
 
     try:
+        print('Invoking gemini llm....')
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-1.5-flash")
         start_time = time.time()
         text = translate_long_text(text, src_lang='el', target_lang='en')
         response = model.generate_content(f'''In a short dashed list, summarize the following text. 
-                                        Do not make any commentary. Just provide the summary. Use at most 5 dashes.
+                                        Do not make any commentary. Just provide the summary. Use at most 5 bullets (•).
                                         The text to be summarized is presented below:
                                         {text}''')
         

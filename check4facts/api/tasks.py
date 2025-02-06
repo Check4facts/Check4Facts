@@ -278,6 +278,7 @@ def summarize_text(self, article_id):
                 }
         if (not api) or (answer is None):
             # invoke Gemini llm
+            print('Trying to invoke gemini llm....')
             answer = google_llm(content, article_id)
             if answer:
                 result = {
@@ -329,9 +330,11 @@ def test_summarize_text(self, article_id, text):
                     "time": answer["elapsed_time"],
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
                 }
+        
         if (not api) or (answer is None):
             # invoke Gemini llm
-            answer = google_llm(text, article_id)
+            print('Trying to invoke gemini llm....')
+            answer = google_llm(article_id, text)
             if answer:
                 result = {
                     "summarization": answer["summarization"],
@@ -345,5 +348,5 @@ def test_summarize_text(self, article_id, text):
         print(f"Finished generating summary in: {result['time']} seconds")
 
         return result
-    except:
-        print("An exception occurred")
+    except Exception as e:
+        print(f"An exception occurred: {e}")

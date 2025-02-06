@@ -34,10 +34,12 @@ class groq_api:
     def run(self, text):
         max_retries = 10
         retries = 0
+        text = translate_long_text(text, src_lang='el', target_lang='en')
+        print(text)
         messages = [
             (
                 "system",
-                f"""You are a text summarizer. Summarize the following text in the form of a short bulleted list, meaning 3 or 4 bullets.
+                f"""You are a text summarizer. Summarize the following text in the form of a short bulleted list, meaning 3 or 4 bullets (•).
                         Keep the sentences and the list short and to the point. Do not make any intoduction, just provide the summary.
                         DO NOT WRITE "HERE IS A SUMMARY" OR SOMEHTING RELEVANT.
                         """,
@@ -98,7 +100,8 @@ class groq_api:
         if ai_msg is None:
             print('Failed to produce result. Trying with the gemini llm next....')
             return None
-        
+        print('Translating here:')
+        print(ai_msg.content)
         text = translate_long_text(ai_msg.content, src_lang='en', target_lang='el')
         text = text_to_bullet_list(text)
         text = bullet_to_html_list(text)
@@ -114,7 +117,6 @@ class groq_api:
         from langchain.prompts import PromptTemplate
         from langchain.chains.summarize import load_summarize_chain
         from langchain.text_splitter import RecursiveCharacterTextSplitter
-        
         llm_name = llm.model_name
 
         #Dynamically split the text into three parts
@@ -178,38 +180,3 @@ class groq_api:
         }
 
 
-
-        # # Initialize text splitter
-        # text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=100)
-        # docs = text_splitter.create_documents([text])
-        # print(f"Created {len(docs)} documents")
-        
-        # # Define the map template
-        # map_template = """Summarize the following text in the form of a short bulleted list.
-        #                 Keep the sentences and the list short and to the point. Do not make any commentary, just provide the summary.
-        #                 Text to be summarized: {docs}"""
-        
-        # map_prompt = PromptTemplate.from_template(map_template)
-        # # Define the reduce template
-        # reduce_template = """The following is a set of summaries:
-        #                     {docs}
-        #                     Summarize the following text in the form of a short bulleted list. 
-        #                     Keep the sentences and the list short and to the point. Do not make any commentary, just provide the summary."""
-        
-        # reduce_prompt = PromptTemplate.from_template(reduce_template)
-        # # Use the new syntax for creating the map and reduce steps
-        # map_chain = map_prompt | llm  # Chain map prompt with LLM
-        # reduce_chain = reduce_prompt | llm  # Chain reduce prompt with LLM
-        # # Create the map-reduce chain using RunnableMapReduce
-        
-        # map_reduce_chain = load_summarize_chain(
-        #     llm=ChatGroq(model=llm_name),
-        #     chain_type="map_reduce",
-        #     return_intermediate_steps=False
-        # )
-        # # Run the chain
-        
-        # final_summary = map_reduce_chain({"input_documents": docs})
-        # print('FINAL SUMMARY: ')
-        # print(final_summary)
-        # return final_summary

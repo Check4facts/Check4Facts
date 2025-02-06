@@ -1,12 +1,22 @@
 from deep_translator import GoogleTranslator
+from googletrans import Translator
+import asyncio
 import time
 import nltk
 
 
 # Make sure to download the Punkt tokenizer models if not already done
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
 
-nltk.download('punkt')
-nltk.download('punkt_tab')
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    nltk.download('punkt_tab')
+
+
 # Method to split text into chunks while avoiding abrupt sentence splitting
 def split_text_into_chunks(text, max_chunk_size=100):
     sentences = nltk.sent_tokenize(text)
@@ -52,14 +62,28 @@ def translate(text, src_lang, target_lang):
             return translated
         except Exception as e:
             print(f"Error occurred during translation: {e}")
+            print(f"Trying again....")
             if attempt < retries - 1:
                 time.sleep(2)  
             else:
-                return None
+                for attempt in range(retries):
+                    try:
+                        translated_text = asyncio.run(translate_backup(text, src_lang='el', target_lang='en'))
+                        return translated_text
+                    except Exception as e:
+                        print(f"Error occurred during backup translation: {e}")
+                        print(f"Trying again....")
+                        if attempt < retries - 1:
+                            continue
+                        if attempt == retries -1:
+                            print('Could not translate text. Please try again later.')
+                            return None
 
 
-
-
-
+async def translate_backup(text, src_lang, target_lang):
+    translator = Translator()
+    await asyncio.sleep(2)
+    translated = await translator.translate(text, src=src_lang, dest=target_lang)
+    return translated.text
 
 

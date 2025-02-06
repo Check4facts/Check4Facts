@@ -4,6 +4,9 @@ import numpy as np
 import re
 from spacy.lang.el import Greek
 from bs4 import BeautifulSoup
+import nltk
+from nltk.tokenize import sent_tokenize
+#nltk.download('punkt')
 
 # nlp = Greek()
 # nlp.add_pipe("sentencizer")
@@ -13,14 +16,17 @@ def extract_text_from_html(html_string):
     return soup.get_text(separator=' ', strip=True)
 
 def text_to_bullet_list(text):
-    # doc = nlp(text)
-    # sentences = [sent.text.strip() for sent in doc.sents]
-    sentences = re.split(r'(?<=[.!?])\s+', text)
+
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+        
+    sentences = sent_tokenize(text, language='greek')
     bulleted_list = "\n".join([
-    "• " + sentence.replace("*", "") 
+    "• " + sentence.replace("*", "")
     for sentence in sentences 
-    if "ακολουθεί μία περίληψη" not in sentence.lower()
-])
+    if "ακολουθεί μία περίληψη" not in sentence.lower()])
 
     return bulleted_list
 
@@ -32,6 +38,8 @@ def bullet_to_html_list(text):
 
     bullet_points = re.split(r'\s*•\s*', text)
     bullet_points = [f"<li>{point.strip()}</li><br>" for point in bullet_points if point.strip()]
+
+
     return "<ul>" + "".join(bullet_points) + "</ul>"
 
 
