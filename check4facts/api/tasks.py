@@ -279,7 +279,7 @@ def summarize_text(self, article_id):
         if (not api) or (answer is None):
             # invoke Gemini llm
             print('Trying to invoke gemini llm....')
-            answer = google_llm(content, article_id)
+            answer = google_llm(article_id, content)
             if answer:
                 result = {
                     "summarization": answer["summarization"],

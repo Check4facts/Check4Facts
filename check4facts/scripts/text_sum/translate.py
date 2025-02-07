@@ -68,7 +68,7 @@ def translate(text, src_lang, target_lang):
             else:
                 for attempt in range(retries):
                     try:
-                        translated_text = asyncio.run(translate_backup(text, src_lang='el', target_lang='en'))
+                        translated_text = asyncio.run(translate_backup(text, src_lang=src_lang, target_lang=target_lang))
                         return translated_text
                     except Exception as e:
                         print(f"Error occurred during backup translation: {e}")
