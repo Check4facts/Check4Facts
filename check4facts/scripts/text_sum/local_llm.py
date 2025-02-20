@@ -91,10 +91,9 @@ def google_llm(article_id, text):
         model = genai.GenerativeModel("gemini-2.0-flash")
         start_time = time.time()
         text = translate_long_text(text, src_lang='el', target_lang='en')
-        response = model.generate_content(f'''In a short dashed list, summarize the following text. 
-                                        Do not make any commentary. Just provide the summary. Use at most 5 bullets (•).
-                                        DO NOT WRITE "HERE IS A SUMMARY" OR SOMEHTING RELEVANT.
-                                        The text to be summarized is presented below:
+        response = model.generate_content(f'''Summarize the following text in the form of a short bulleted list, meaning 3 or 4 bullets (•).
+                        Keep the sentences and the list short and to the point. Do not make any intoduction, just provide the summary.
+                        DO NOT WRITE "HERE IS A SUMMARY" OR SOMEHTING RELEVANT.
                                         {text}''')
         
         text = translate_long_text(response.text, src_lang='en', target_lang='el')

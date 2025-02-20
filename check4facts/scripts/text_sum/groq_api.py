@@ -130,13 +130,13 @@ class groq_api:
 
         # Define the map template
         map_template = """Summarize the provided text.
-                      Keep the summary short and concise. Do not make any commentary, just provide the summary.
+                      Keep the summary short and concise. Do not write "HERE IS A SUMMARY" or something relevant.
                       Text to be summarized: {docs}"""
         map_prompt = PromptTemplate.from_template(map_template)
 
        # Define the reduce template
         reduce_template = """Summarize the following text in the form of a short bulleted list. Generate 5 bullets (•) at most. 
-                         Keep the sentences and the list short and to the point. Do not make any commentary, just provide the summary.
+                         Keep the sentences and the list short and to the point. Do not write "HERE IS A SUMMARY" or something relevant.
                          Text to summarize: {docs}"""
         reduce_prompt = PromptTemplate.from_template(reduce_template)
 
