@@ -3,6 +3,8 @@ import psycopg2
 from psycopg2.extensions import register_adapter, AsIs
 import pickle
 
+from check4facts.scripts.text_sum.text_process import extract_text_from_html
+
 
 # Functions to adapt NumPy types
 def adapt_numpy_scalar(numpy_scalar):
@@ -400,6 +402,26 @@ class DBHandler:
         except Exception as e:
             print(f"Error fetching content from article: {e}")
             self.connection.rollback()
+            
+    def fetch_articles_without_summary(self):
+        if not self.connection:
+            self.connect()
+
+        try:
+            sql = """
+                SELECT id, content
+                FROM article
+                WHERE summary IS NULL AND published = TRUE;
+            """
+            self.cursor.execute(sql)
+            results = self.cursor.fetchall()
+            results = list(map(lambda item: (item[0], extract_text_from_html(item[1])), results))
+            return results
+
+        except Exception as e:
+            print(f"Error fetching articles without summary: {e}")
+            self.connection.rollback()
+            return []
 
     # added extra functions for text summarization handling
 

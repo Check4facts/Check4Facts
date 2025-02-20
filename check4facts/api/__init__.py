@@ -12,6 +12,7 @@ from check4facts.api.tasks import (
     intial_train_task,
     summarize_text,
     test_summarize_text,
+    batch_summarize_text,
 )
 from check4facts.config import DirConf
 from check4facts.database import DBHandler
@@ -156,6 +157,16 @@ def create_app() -> Flask:
     def get_summ(article_id):
 
         task = summarize_text.apply_async(kwargs={"article_id": article_id})
+        return (
+            jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
+            202,
+        )
+
+    @app.route("/batch-summarize", methods=["GET"])
+    def batch_get_summ():
+
+        task = batch_summarize_text.apply_async(kwargs={})
+
         return (
             jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
             202,

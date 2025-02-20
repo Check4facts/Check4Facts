@@ -278,7 +278,7 @@ def summarize_text(self, article_id):
                 }
         if (not api) or (answer is None):
             # invoke Gemini llm
-            print('Trying to invoke gemini llm....')
+            print("Trying to invoke gemini llm....")
             answer = google_llm(article_id, content)
             if answer:
                 result = {
@@ -309,6 +309,58 @@ def summarize_text(self, article_id):
         print(f"Error generating summary for article with id {article_id}: {e}")
 
 
+@shared_task(bind=True, ignore_result=False)
+def batch_summarize_text(self):
+    from check4facts.api import dbh
+    
+    try:
+
+        # Fetch the id and content (extract_text_from_html function used)
+        # from all published articles and null summary
+        articles = dbh.fetch_articles_without_summary()
+
+        print(f"Total articles fetched: {len(articles)}")
+        for index, article in enumerate(articles):
+            print(f"Processing article {index + 1}/{len(articles)} with id: {article[0]}")
+            article_id, content = article[0], article[1]
+
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "current": index + 1,
+                    "total": len(articles),
+                    "type": "BATCH_SUMMARIZE",
+                },
+            )
+            # invoke Gemini llm
+            print("Trying to invoke gemini llm....")
+            answer = google_llm(article_id, content)
+            if answer:
+                result = {
+                    "summarization": answer["summarization"],
+                    "time": answer["elapsed_time"],
+                    "article_id": article_id,
+                    "timestamp": answer["timestamp"],
+                }
+            else:
+                # if Gemini Fails, call Groq
+                answer = groq_api().run(content)
+                if answer is not None:
+                    result = {
+                        "summarization": answer["response"],
+                        "time": answer["elapsed_time"],
+                        "article_id": article_id,
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                    }
+            dbh.insert_summary(article_id, result["summarization"])
+            time.sleep(5)
+
+        
+        dbh.disconnect()
+
+    except Exception as e:
+        print(f"Error generating summary for published articles: {e}")
+
 # Test tasks
 
 
@@ -330,10 +382,10 @@ def test_summarize_text(self, article_id, text):
                     "time": answer["elapsed_time"],
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
                 }
-        
+
         if (not api) or (answer is None):
             # invoke Gemini llm
-            print('Trying to invoke gemini llm....')
+            print("Trying to invoke gemini llm....")
             answer = google_llm(article_id, text)
             if answer:
                 result = {
