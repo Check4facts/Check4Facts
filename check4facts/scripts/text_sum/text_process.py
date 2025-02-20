@@ -37,7 +37,7 @@ def bullet_to_html_list(text):
         raise ValueError("Input must be a string or a tuple containing a string")
 
     bullet_points = re.split(r'\s*•\s*', text)
-    bullet_points = [f"<li>{point.strip()}</li><br>" for point in bullet_points if point.strip()]
+    bullet_points = [f"<li>{point.strip()}</li>" for point in bullet_points if point.strip()]
 
 
     return "<ul>" + "".join(bullet_points) + "</ul>"

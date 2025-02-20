@@ -70,7 +70,7 @@ def google_llm(article_id, text):
     load_dotenv()
     api_key = os.getenv("GEMINI_API_KEY")
 
-    print(f"article_id: {article_id}, tex: {text[:100]}")
+    print(f"article_id: {article_id}, text: {text[:100]}")
 
     try:
         if isinstance(article_id, str):
@@ -88,11 +88,12 @@ def google_llm(article_id, text):
     try:
         print('Invoking gemini llm....')
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.0-flash")
         start_time = time.time()
         text = translate_long_text(text, src_lang='el', target_lang='en')
         response = model.generate_content(f'''In a short dashed list, summarize the following text. 
                                         Do not make any commentary. Just provide the summary. Use at most 5 bullets (•).
+                                        DO NOT WRITE "HERE IS A SUMMARY" OR SOMEHTING RELEVANT.
                                         The text to be summarized is presented below:
                                         {text}''')
         
