@@ -34,14 +34,14 @@ class groq_api:
     def run(self, text):
         max_retries = 10
         retries = 0
-        text = translate_long_text(text, src_lang='el', target_lang='en')
-        print(text)
+        #text = translate_long_text(text, src_lang='el', target_lang='en')
+
         messages = [
             (
                 "system",
-                f"""You are a text summarizer. Summarize the following text in the form of a short bulleted list, meaning 3 or 4 bullets (•).
+                f"""You are a Greek speaking text summarizer. Summarize the following text in the form of a short bulleted list, meaning 3 or 4 bullets (•).
                         Keep the sentences and the list short and to the point. Do not make any intoduction, just provide the summary.
-                        DO NOT WRITE "HERE IS A SUMMARY" OR SOMEHTING RELEVANT.
+                        DO NOT WRITE "HERE IS A SUMMARY" OR SOMEHTING RELEVANT. Answer in Greek language.
                         """,
                 
             ),
@@ -100,9 +100,8 @@ class groq_api:
         if ai_msg is None:
             print('Failed to produce result. Trying with the gemini llm next....')
             return None
-        print('Translating here:')
-        print(ai_msg.content)
-        text = translate_long_text(ai_msg.content, src_lang='en', target_lang='el')
+        #text = translate_long_text(ai_msg.content, src_lang='en', target_lang='el')
+        text = ai_msg.content
         text = text_to_bullet_list(text)
         text = bullet_to_html_list(text)
 
@@ -129,7 +128,7 @@ class groq_api:
         
 
         # Define the map template
-        map_template = """Summarize the provided text.
+        map_template = """Summarize the provided text in Greek language.
                       Keep the summary short and concise. Do not write "HERE IS A SUMMARY" or something relevant.
                       Text to be summarized: {docs}"""
         map_prompt = PromptTemplate.from_template(map_template)
@@ -137,6 +136,7 @@ class groq_api:
        # Define the reduce template
         reduce_template = """Summarize the following text in the form of a short bulleted list. Generate 5 bullets (•) at most. 
                          Keep the sentences and the list short and to the point. Do not write "HERE IS A SUMMARY" or something relevant.
+                         Answer in Greek language.
                          Text to summarize: {docs}"""
         reduce_prompt = PromptTemplate.from_template(reduce_template)
 
@@ -166,10 +166,10 @@ class groq_api:
         final_summary = reduce_chain.invoke({"docs": combined_results})
 
         print('FINAL SUMMARY: ')
-        print(final_summary.content if hasattr(final_summary, 'content') else str(final_summary))
+        #print(final_summary.content if hasattr(final_summary, 'content') else str(final_summary))
         result = final_summary.content if hasattr(final_summary, 'content') else str(final_summary)
-
-        text = translate_long_text(result, src_lang='en', target_lang='el')
+        text = result
+        #text = translate_long_text(result, src_lang='en', target_lang='el')
         text = text_to_bullet_list(text)
         text = bullet_to_html_list(text)
         
