@@ -321,7 +321,9 @@ def batch_summarize_text(self):
 
         print(f"Total articles fetched: {len(articles)}")
         for index, article in enumerate(articles):
-            print(f"Processing article {index + 1}/{len(articles)} with id: {article[0]}")
+            print(
+                f"Processing article {index + 1}/{len(articles)} with id: {article[0]}"
+            )
             article_id, content = article[0], article[1]
 
             self.update_state(
@@ -350,16 +352,20 @@ def batch_summarize_text(self):
                         "summarization": answer["response"],
                         "time": answer["elapsed_time"],
                         "article_id": article_id,
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                        "timestamp": time.strftime(
+                            "%Y-%m-%d %H:%M:%S", time.localtime()
+                        ),
                     }
+
+            print(result["summarization"])
             dbh.insert_summary(article_id, result["summarization"])
             time.sleep(5)
 
-        
         dbh.disconnect()
 
     except Exception as e:
         print(f"Error generating summary for published articles: {e}")
+
 
 # Test tasks
 
