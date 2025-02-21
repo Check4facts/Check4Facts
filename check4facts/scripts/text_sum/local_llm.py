@@ -70,7 +70,7 @@ def google_llm(article_id, text):
     load_dotenv()
     api_key = os.getenv("GEMINI_API_KEY")
 
-    print(f"article_id: {article_id}, tex: {text[:100]}")
+    #print(f"article_id: {article_id}, tex: {text[:100]}")
 
     try:
         if isinstance(article_id, str):
@@ -90,19 +90,21 @@ def google_llm(article_id, text):
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-2.0-flash")
         start_time = time.time()
-        text = translate_long_text(text, src_lang='el', target_lang='en')
-        response = model.generate_content(f'''Summarize the following text in the form of a short bulleted list, meaning 3 or 4 bullets (•).
+        #text = translate_long_text(text, src_lang='el', target_lang='en')
+        response = model.generate_content(f'''Summarize the following text in Greek language, in the form of a short bulleted list, meaning 3 or 4 bullets (•).
                         Keep the sentences and the list short and to the point. Do not make any intoduction, just provide the summary.
-                        DO NOT WRITE "HERE IS A SUMMARY" OR SOMEHTING RELEVANT.
+                        Answer in the Greek language.
+                        DO NOT WRITE "HERE IS A SUMMARY" OR SOMEHTING RELEVANT. 
                                         {text}''')
         
-        text = translate_long_text(response.text, src_lang='en', target_lang='el')
+        #text = translate_long_text(response.text, src_lang='en', target_lang='el')
+        text = response.text
         text = text_to_bullet_list(text)
         text = bullet_to_html_list(text)
 
         end_time = time.time()
         
-        return {"summarization": text, 
+        return {"summarization": response.text, 
                 "elapsed_time": np.round(end_time-start_time,2), "article_id": article_id, 
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
     except Exception as e:
