@@ -55,7 +55,7 @@ class Harvester:
         doc = nlp(body)
 
         # Extract sentences
-        body_sentences = [sentence.text for sentence in doc.sentences]
+        body_sentences = [sentence.text for sentence in doc.sentences if not self.is_english(sentence)]
     
         a = claim
         b = pd.DataFrame(body_sentences)

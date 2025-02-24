@@ -62,4 +62,3 @@ def translate(text, src_lang, target_lang):
 
 
 
-

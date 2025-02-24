@@ -37,6 +37,8 @@ class groq_api():
         max_retries = 10
         retries= 0
 
+      
+
         if self.info is not None:
              messages = [
                         (
@@ -64,8 +66,8 @@ Result of the statement:
 Justification:'''
 
                         ),
-                        ("human", f'''External info '{translate_long_text(self.info, src_lang='el', target_lang='en')}'
-                         Statement: '{translate(self.query, src_lang='el', target_lang='en')}' "'''),
+                        ("human", f'''External info '{self.info}'
+                         Statement: '{self.query}' "'''),
                     ]
 
         else:
@@ -98,7 +100,7 @@ Justification:
 """
 
                         ),
-                        ("human", f''' Check the following statement: {self.query}
+                        ("human", f''' Analyse the following statement: {self.query}
         '''),
                     ]
         ai_msg = None
@@ -108,17 +110,13 @@ Justification:
 
             #try to create an api call with the first llm     
             try:
-                start_time = time.time()
                 ai_msg = self.llm.invoke(messages)
-                end_time = time.time()
                 break
 
             #if it fails to produce a result, try with the second llm
             except Exception as e:
                 try:
-                    start_time = time.time()
                     ai_msg = self.llm_2.invoke(messages)
-                    end_time = time.time()
                     break
 
                 #if a second llm doesn't work either, try another time                     
@@ -128,8 +126,7 @@ Justification:
 
         #if no answer could be generated, return none and invoke the local llm
         if ai_msg is None:  
-            return {"response" : None, "elapsed_time": None}
+            return {"response" : None}
       
-        return {"response" : translate_long_text(ai_msg.content, src_lang='en', target_lang='el'),
-                        "groq_api_elapsed_time": np.round(end_time-start_time,2)}
+        return {"response" : ai_msg.content}
             

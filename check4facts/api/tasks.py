@@ -419,6 +419,9 @@ def run_rag(article_id, claim, n):
     try:
         answer = run_pipeline(article_id, claim, n)
         if answer:
+            print('FINAL ANSWER: ')
+            print()
+            print(answer)
             return answer
         else:
             raise Exception("Pipeline returned empty result")

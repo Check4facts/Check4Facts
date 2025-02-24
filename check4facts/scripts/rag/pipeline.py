@@ -10,6 +10,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import time
 import tiktoken
+import numpy as np
 os.environ["OLLAMA_MODE"] = "remote"
 
 
@@ -128,9 +129,7 @@ class pipeline:
 
                 
                 """
-        # print('----------------TRANSLATION----------------')
-        # print(translate(input))
-        # print('-------------------------------------------')
+
         
         while True:
             try:
@@ -176,7 +175,7 @@ class pipeline:
         return response
     
 
-    def run_gemini(self, info):
+    def run_gemini(self, info, article_id):
 
         info = "\n\n".join(info)
         print('\n')
@@ -190,64 +189,9 @@ class pipeline:
 
 
         gemini_instance  = gemini_llm(query=self.query, external_knowledge=info)
-        answer = gemini_instance.google_llm()
+        answer = gemini_instance.google_llm(article_id)
         return answer
 
-
-# this function runs the rag method from the terminal, without the use of api, for debugging purposes
-def run_debug():
-
-
-    while True:
-        print("You can quit by typing 'exit' ,'quit' or 'bye'")
-        user_input1 = input("Insert claim here: ")
-        if user_input1.lower().strip() in ["exit", "quit", "bye"]:
-            print("Exiting...")
-            break
-        user_input2 = input("Insert number of relevant web-souces to harvest (max number is 5): ")  
-        if user_input2.lower().strip() in ["exit", "quit", "bye"]:
-            print("Exiting...")
-            break
-        start_time = time.time()   
-        pip = pipeline(str(user_input1) , int(user_input2))
-        external_sources = pip.retrieve_knowledge(int(user_input2)+2)
-
-        if external_sources is None:
-            pass
-
-        # make the model run on groq api
-        response = None
-        gemini_response = None
-        answer = None
-        #response = pip.create_api(external_sources)
-        if response:
-            pass
-            # print(response['response'])
-            # end_time = time.time()
-            # print(f'RAG method was completed in {round(end_time - start_time,2)} "seconds"')  
-            # print(f'Resources: {pip.harvested_urls}')
-            # answer = response['response']
-
-        
-        #if the connections fails to be established or the response is empty, invoke the gemini LLM.
-        if not answer:
-            pass
-            # gemini_response = None
-            # gemini_response = pip.run_gemini(external_sources)
-            # print('ANSWER IS: ')
-            # print(gemini_response['response'])
-            # answer = gemini_response
-
-
-        #if the connections fails to be established or the response is empty, invoke the local LLM.
-        if not answer:
-            print('Running local ollama model...')
-            #run the model with ollama, max sources are the number of web sources plus 2
-            answer =  pip.run_local_model(external_sources)
-            end_time = time.time()
-            print(f'RAG method was completed in {round(end_time - start_time,2)} "seconds"')  
-            return answer
-        
 
 
 def run_pipeline(article_id, claim, num_of_web_sources):
@@ -263,37 +207,40 @@ def run_pipeline(article_id, claim, num_of_web_sources):
     external_sources = pip.retrieve_knowledge(int(num_of_web_sources)+2)
 
     # make the model run on groq api
-    response = None
-    gemini_response = None
-    answer = None
-    #response = pip.create_api(external_sources)
-    if response:
-        print(response['response'])
-        end_time = time.time()
-        print(f'RAG method was completed in {round(end_time - start_time,2)} "seconds"')  
-        print(f'Resources: {pip.harvested_urls}')
-        answer = response['response']
+    # response = pip.create_api(external_sources)
+    # if response:
+    #     end_time = time.time()
+    #     response['sources'] = pip.harvested_urls
+    #     response['elapsed time'] = np.round((end_time-start_time) , 2)
+    #     response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    #     return response
 
         
     #if the connections fails to be established or the response is empty, invoke the gemini LLM.
-    if not answer:
-        gemini_response = None
-        gemini_response = pip.run_gemini(external_sources)
-        print('ANSWER IS: ')
-        print(gemini_response['response'])
-        answer = gemini_response
+    gemini_response = pip.run_gemini(external_sources, article_id)
+    # print('ANSWER IS: ')
+    # print(gemini_response['response'])
+    # print(gemini_response)
+    if gemini_response:
+        end_time = time.time()
+        gemini_response['sources'] = pip.harvested_urls
+        gemini_response['elapsed time'] = np.round((end_time-start_time) , 2)
+        gemini_response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        return gemini_response
 
 
     #if the connections fails to be established or the response is empty, invoke the local LLM.
-    if not answer:
-        print('Running local ollama model...')
-        #run the model with ollama, max sources are the number of web sources plus 2
-        answer =  pip.run_local_model(external_sources)
+    print('Running local ollama model...')
+    #run the model with ollama, max sources are the number of web sources plus 2
+    answer =  pip.run_local_model(external_sources)
+    if answer:
         end_time = time.time()
-        print(f'RAG method was completed in {round(end_time - start_time,2)} "seconds"')  
+        answer['sources'] = pip.harvested_urls
+        answer['elapsed time'] = np.round((end_time-start_time) , 2)
+        answer["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        return answer  
     
 
-    answer['sources'] = pip.harvested_urls
-    return answer
+    return {"error": "All llm invokation attempts failed"} 
         
     

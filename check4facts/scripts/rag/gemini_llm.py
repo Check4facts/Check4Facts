@@ -1,5 +1,4 @@
 
-from check4facts.scripts.rag.translate import translate_long_text, translate
 import time
 import numpy as np
 
@@ -10,8 +9,8 @@ class gemini_llm:
 
         
         self.prompt_without_rag = f'''
-
-    You are given a statement: {translate(query, src_lang='el', target_lang='en')} that needs to be evaluated for accuracy.
+    
+    You are given a statement: {query} that needs to be evaluated for accuracy.
         Use your knowledge to decide whether the statement is TRUE, FALSE, PARTIALLY-TRUE, or PARTIALLY-FALSE.
 
         Before deciding:
@@ -33,6 +32,8 @@ class gemini_llm:
         Statement: 
         Statement Outcome: 
         Justification:
+
+        Your answer should be in the Greek language.
 
     '''
 
@@ -61,8 +62,10 @@ class gemini_llm:
     Result of the statement:
     Justification:
 
-    statement: {translate(query, src_lang='el', target_lang='en')}
-    external knowledge: {translate_long_text(external_knowledge, src_lang='el', target_lang='en')}
+    statement: {query}
+    external knowledge: {external_knowledge}
+
+    Your answer should be in the Greek. 
 
     '''
 
@@ -76,7 +79,7 @@ class gemini_llm:
 
 
 
-    def google_llm(self, article_id=0):
+    def google_llm(self, article_id):
         print('Invoking gemini llm...')
         import google.generativeai as genai
         import os
@@ -86,7 +89,7 @@ class gemini_llm:
         logging.getLogger("absl").setLevel(logging.CRITICAL)
         logging.basicConfig(level=logging.ERROR)
         load_dotenv()
- 
+
 
         try:
             article_id = int(article_id)
@@ -94,14 +97,11 @@ class gemini_llm:
             print("Error: article_id is not an integer")
             return None
 
-            if not api_key:
-                print("Error: article_id is not an integer")
-                return None
+         
 
         try:
-            genai.configure(os.getenv('GEMINI_API_KEY'))
+            genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
             model = genai.GenerativeModel("gemini-1.5-flash")
-            start_time = time.time()
             if self.external_knowledge:
                 response = model.generate_content(self.prompt_with_rag)
             else: 
@@ -109,11 +109,10 @@ class gemini_llm:
                 
         
 
-            end_time = time.time()
+            
                 
-            return {"response": translate_long_text(response.text, src_lang='en', target_lang='el'),
-                        "elapsed_time": np.round(end_time-start_time,2), "article_id": article_id, 
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+            return {"response": response.text,
+                     "article_id": article_id,  "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
         except Exception as e:
                 print(f"Error occured during the Gemini model invokation: {e}")
                 return None
