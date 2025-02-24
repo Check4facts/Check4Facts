@@ -39,6 +39,8 @@ uwsgi = "*"
 langchain-core = "*"
 langchain-text-splitters = "*"
 langchain = "*"
+google-generativeai = "*"
+googletrans = "*"
 
 [requires]
 python_version = "3.10"
