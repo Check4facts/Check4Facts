@@ -104,7 +104,7 @@ def google_llm(article_id, text):
 
         end_time = time.time()
         
-        return {"summarization": response.text, 
+        return {"summarization": text, 
                 "elapsed_time": np.round(end_time-start_time,2), "article_id": article_id, 
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
     except Exception as e:
