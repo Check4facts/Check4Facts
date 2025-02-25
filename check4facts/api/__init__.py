@@ -153,8 +153,8 @@ def create_app() -> Flask:
                 400,
             )
 
-    @app.route("/summarize/<article_id>", methods=["GET"])
-    def get_summ(article_id):
+    @app.route("/summarize/<article_id>", methods=["POST"])
+    def summ(article_id):
 
         task = summarize_text.apply_async(kwargs={"article_id": article_id})
         return (
@@ -162,8 +162,8 @@ def create_app() -> Flask:
             202,
         )
 
-    @app.route("/batch-summarize", methods=["GET"])
-    def batch_get_summ():
+    @app.route("/batch-summarize", methods=["POST"])
+    def batch_summ():
 
         task = batch_summarize_text.apply_async(kwargs={})
 
