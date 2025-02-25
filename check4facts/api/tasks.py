@@ -265,30 +265,32 @@ def summarize_text(self, article_id):
         # Keep only the actual text from the article's content
         content = extract_text_from_html(content)
 
-        # try invoking the groq llm
-        api = groq_api()
-        if api:
-            answer = api.run(content)
-            if answer is not None:
-                result = {
-                    "summarization": answer["response"],
-                    "time": answer["elapsed_time"],
-                    "article_id": article_id,
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-                }
-        if (not api) or (answer is None):
-            # invoke Gemini llm
-            print("Trying to invoke gemini llm....")
-            answer = google_llm(article_id, content)
-            if answer:
-                result = {
-                    "summarization": answer["summarization"],
-                    "time": answer["elapsed_time"],
-                    "article_id": article_id,
-                    "timestamp": answer["timestamp"],
-                }
-            else:
-                # if everything fails, invoke the local model
+        # invoke Gemini llm
+        print("Trying to invoke gemini llm....")
+        answer = google_llm(article_id, content)
+        if answer:
+            result = {
+                "summarization": answer["summarization"],
+                "time": answer["elapsed_time"],
+                "article_id": article_id,
+                "timestamp": answer["timestamp"],
+            }
+        else:
+            # try invoking the groq llm
+            print("Trying to invoke groq llm....")
+            api = groq_api()
+            if api:
+                answer = api.run(content)
+                if answer is not None:
+                    result = {
+                        "summarization": answer["response"],
+                        "time": answer["elapsed_time"],
+                        "article_id": article_id,
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                    }
+                    
+            # if everything fails, invoke the local model
+            if (not api) or (answer is None):
                 result = invoke_local_llm(content, article_id)
 
         print(
