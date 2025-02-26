@@ -43,6 +43,7 @@ google-generativeai = "*"
 googletrans = "*"
 duckduckgo-search = "*"
 ollama = "*"
+sentence-transformers = "*"
 
 [requires]
 python_version = "3.10"
