@@ -33,7 +33,7 @@ class gemini_llm:
         Statement Outcome: 
         Justification:
 
-        Your answer should be in the Greek language.
+        Your answer should be in the Greek language. Do not use the (*) symbol.
 
     '''
 
@@ -65,7 +65,7 @@ class gemini_llm:
     statement: {query}
     external knowledge: {external_knowledge}
 
-    Your answer should be in the Greek. 
+    Your answer should be in the Greek. Do not use the (*) symbol.
 
     '''
 

@@ -206,14 +206,22 @@ def run_pipeline(article_id, claim, num_of_web_sources):
     pip = pipeline(str(claim) , int(num_of_web_sources))
     external_sources = pip.retrieve_knowledge(int(num_of_web_sources)+2)
 
-    # make the model run on groq api
-    # response = pip.create_api(external_sources)
-    # if response:
-    #     end_time = time.time()
-    #     response['sources'] = pip.harvested_urls
-    #     response['elapsed time'] = np.round((end_time-start_time) , 2)
-    #     response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    #     return response
+    #make the model run on groq api
+    groq_response = pip.create_api(external_sources)
+    if groq_response:
+        end_time = time.time()
+        label_match = re.search(r"(?i)Result of the statement:\s*(.*?)\s*justification:", str(groq_response), re.DOTALL)
+        label = label_match.group(1) if label_match else None
+        justification_match = re.search(r"Justification:\s*(.*)", str(groq_response), re.DOTALL)
+        justification = justification_match.group(1).strip() if justification_match else None
+        groq_response['sources'] = pip.harvested_urls
+        groq_response['label'] = re.sub(r"\s+$", "", label)
+        groq_response['label'] = str(groq_response['label']).strip()
+        label = re.sub(r"\s+$", "", label)
+        groq_response['justification'] = justification
+        groq_response['elapsed time'] = np.round((end_time-start_time) , 2)
+        groq_response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        return groq_response
 
         
     #if the connections fails to be established or the response is empty, invoke the gemini LLM.
@@ -222,8 +230,15 @@ def run_pipeline(article_id, claim, num_of_web_sources):
     # print(gemini_response['response'])
     # print(gemini_response)
     if gemini_response:
+        
         end_time = time.time()
+        label_match = re.search(r"(?i)Result of the statement:\s*(.*?)\s*justification:", str(gemini_response), re.DOTALL)
+        label = label_match.group(1) if label_match else None
+        justification_match = re.search(r"Justification:\s*(.*)", str(gemini_response), re.DOTALL)
+        justification = justification_match.group(1).strip() if justification_match else None
         gemini_response['sources'] = pip.harvested_urls
+        gemini_response['label'] = re.sub(r"\s+$", "", label)
+        gemini_response['justification'] = justification
         gemini_response['elapsed time'] = np.round((end_time-start_time) , 2)
         gemini_response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         return gemini_response
