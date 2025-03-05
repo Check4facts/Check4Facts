@@ -44,7 +44,7 @@ class groq_api():
                         (
                             "system",
                         f'''You have at your disposal information '[Information]' and a statement: '[User Input]' whose accuracy must be evaluated. 
-Use only the provided information in combination with your knowledge to decide whether the statement is TRUE, FALSE, PARTIALLY TRUE, or PARTIALLY FALSE.
+Use only the provided information in combination with your knowledge to decide whether the statement is ACCURATE, INACCURATE, RELATIVELY ACCURATE, or RELATIVELY INACCURATE.
 
 Before you decide:
 
@@ -54,10 +54,10 @@ Before you decide:
 
 Result: Provide a clear answer by choosing one of the following labels:
 
-- TRUE: If the statement is fully confirmed by the information and evidence you have.
-- FALSE: If the statement is clearly disproved by the information and evidence you have.
-- PARTIALLY TRUE: If the statement contains some correct elements, but not entirely accurate.
-- PARTIALLY FALSE: If the statement contains some correct elements but also contains misleading or inaccurate information.
+- ACCURATE: If the statement is fully confirmed by the information and evidence you have.
+- INACCURATE: If the statement is clearly disproved by the information and evidence you have.
+- RELATIVELY ACCURATE: If the statement contains some correct elements, but not entirely accurate.
+- RELATIVELY INACCURATE: If the statement contains some correct elements but also contains misleading or inaccurate information.
 
 Finally, explain your reasoning clearly and focus on the provided data and your own knowledge. Avoid unnecessary details and try to be precise and concise in your analysis. Your answers should be in the following format:
 
@@ -76,7 +76,7 @@ Justification:'''
                             "system",
                         f"""
 You are given a statement: '[statement]' that needs to be evaluated for accuracy.
-Use your knowledge to decide whether the statement is TRUE, FALSE, PARTIALLY-TRUE, or PARTIALLY-FALSE.
+Use your knowledge to decide whether the statement is ACCURATE, INACCURATE, RELATIVELY ACCURATE, or RELATIVELY INACCURATE.
 
 Before deciding:
 
@@ -86,10 +86,10 @@ Before deciding:
 
 Outcome: Provide a clear response by selecting one of the following labels:
 
-- TRUE: If the statement is fully confirmed by the information and evidence available to you.
-- FALSE: If the statement is clearly contradicted by the information and evidence available to you.
-- PARTIALLY-TRUE: If the statement contains some correct elements but is not entirely accurate.
-- PARTIALLY-FALSE: If the statement contains some correct elements but also includes misleading or inaccurate information.
+- ACCURATE: If the statement is fully confirmed by the information and evidence available to you.
+- INACCURATE: If the statement is clearly contradicted by the information and evidence available to you.
+- RELATIVELY ACCURATE: If the statement contains some correct elements but is not entirely accurate.
+- RELATIVELY INACCURATE: If the statement contains some correct elements but also includes misleading or inaccurate information.
 
 Finally, explain your reasoning clearly, focusing on the data provided and your own knowledge. 
 Avoid unnecessary details and strive to be precise and concise in your analysis. 

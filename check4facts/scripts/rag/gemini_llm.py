@@ -11,7 +11,7 @@ class gemini_llm:
         self.prompt_without_rag = f'''
     
     You are given a statement: {query} that needs to be evaluated for accuracy.
-        Use your knowledge to decide whether the statement is TRUE, FALSE, PARTIALLY-TRUE, or PARTIALLY-FALSE.
+        Use your knowledge to decide whether the statement is is ACCURATE, INACCURATE, RELATIVELY ACCURATE, or RELATIVELY INACCURATE.
 
         Before deciding:
 
@@ -21,10 +21,10 @@ class gemini_llm:
 
         Outcome: Provide a clear response by selecting one of the following labels:
 
-        - TRUE: If the statement is fully confirmed by the information and evidence available to you.
-        - FALSE: If the statement is clearly contradicted by the information and evidence available to you.
-        - PARTIALLY-TRUE: If the statement contains some correct elements but is not entirely accurate.
-        - PARTIALLY-FALSE: If the statement contains some correct elements but also includes misleading or inaccurate information.
+        - ACCURATE: If the statement is fully confirmed by the information and evidence available to you.
+        - INACCURATE: If the statement is clearly contradicted by the information and evidence available to you.
+        - RELATIVELY ACCURATE: If the statement contains some correct elements but is not entirely accurate.
+        - RELATIVELY INACCURATE: If the statement contains some correct elements but also includes misleading or inaccurate information.
 
         Finally, explain your reasoning clearly, focusing on the data provided and your own knowledge. 
         Avoid unnecessary details and strive to be precise and concise in your analysis. 
@@ -39,7 +39,7 @@ class gemini_llm:
 
         self.prompt_with_rag = f'''
     You have at your disposal information '[Information]' and a statement: '[User Input]' whose accuracy must be evaluated. 
-    Use only the provided information in combination with your knowledge to decide whether the statement is TRUE, FALSE, PARTIALLY TRUE, or PARTIALLY FALSE.
+    Use only the provided information in combination with your knowledge to decide whether the statement is is ACCURATE, INACCURATE, RELATIVELY ACCURATE, or RELATIVELY INACCURATE.
 
     Before you decide:
 
@@ -49,10 +49,10 @@ class gemini_llm:
 
     Result: Provide a clear answer by choosing one of the following labels:
 
-    - TRUE: If the statement is fully confirmed by the information and evidence you have.
-    - FALSE: If the statement is clearly disproved by the information and evidence you have.
-    - PARTIALLY TRUE: If the statement contains some correct elements, but not entirely accurate.
-    - PARTIALLY FALSE: If the statement contains some correct elements but also contains misleading or inaccurate information.
+    - ACCURATE: If the statement is fully confirmed by the information and evidence you have.
+    - INACCURATE: If the statement is clearly disproved by the information and evidence you have.
+    - RELATIVELY ACCURATE: If the statement contains some correct elements, but not entirely accurate.
+    - RELATIVELY INACCURATE: If the statement contains some correct elements but also contains misleading or inaccurate information.
 
     The statement and the external knowledge are listed below:
 
@@ -101,7 +101,7 @@ class gemini_llm:
 
         try:
             genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-2.0-flash")
             if self.external_knowledge:
                 response = model.generate_content(self.prompt_with_rag)
             else: 

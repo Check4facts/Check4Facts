@@ -100,10 +100,10 @@ class pipeline:
     "3. Χρησιμοποίησε τις γνώσεις σου ΜΟΝΟ σε συνδυασμό με την παρεχόμενη πληροφορία, αποφεύγοντας την αναφορά σε "
     "μη εξακριβωμένες πληροφορίες.\n\n"
     "Αποτέλεσμα: Δώσε μια ξεκάθαρη απάντηση επιλέγοντας μία από τις παρακάτω ετικέτες:\n\n"
-    "- ΑΛΗΘΗΣ: Αν η δήλωση είναι απόλυτα επιβεβαιωμένη από την πληροφορία και τα στοιχεία σου.\n"
-    "- ΨΕΥΔΗΣ: Αν η δήλωση διαψεύδεται ξεκάθαρα από την πληροφορία και τα στοιχεία σου.\n"
-    "- ΜΕΡΙΚΩΣ-ΑΛΗΘΗΣ: Αν η δήλωση περιέχει κάποια σωστά στοιχεία, αλλά όχι απόλυτα ακριβή.\n"
-    "- ΜΕΡΙΚΩΣ-ΨΕΥΔΗΣ: Αν η δήλωση περιέχει κάποια σωστά στοιχεία, αλλά περιέχει παραπλανητικές ή ανακριβείς πληροφορίες.\n\n"
+    "- ΑΚΡΙΒΗΣ: Αν η δήλωση είναι απόλυτα επιβεβαιωμένη από την πληροφορία και τα στοιχεία σου.\n"
+    "- ΑΝΑΚΡΙΒΗΣ: Αν η δήλωση διαψεύδεται ξεκάθαρα από την πληροφορία και τα στοιχεία σου.\n"
+    "- ΣΧΕΤΙΚΑ ΑΚΡΙΒΗΣ: Αν η δήλωση περιέχει κάποια σωστά στοιχεία, αλλά όχι απόλυτα ακριβή.\n"
+    "- ΣΧΕΤΙΚΑ ΑΝΑΚΡΙΒΗΣ: Αν η δήλωση περιέχει κάποια σωστά στοιχεία, αλλά περιέχει παραπλανητικές ή ανακριβείς πληροφορίες.\n\n"
     "Τέλος, εξήγησε τη λογική σου με σαφήνεια και επικεντρώσου στα δεδομένα που παρέχονται και στη δική σου γνώση. "
     "Απόφυγε περιττές λεπτομέρειες και προσπάθησε να είσαι ακριβής και περιεκτικός στην ανάλυσή σου."
     "Οι απαντήσεις σου πρέπει να έχουν την μορφή:"
@@ -206,29 +206,11 @@ def run_pipeline(article_id, claim, num_of_web_sources):
     pip = pipeline(str(claim) , int(num_of_web_sources))
     external_sources = pip.retrieve_knowledge(int(num_of_web_sources)+2)
 
-    #make the model run on groq api
-    groq_response = pip.create_api(external_sources)
-    if groq_response:
-        end_time = time.time()
-        label_match = re.search(r"(?i)Result of the statement:\s*(.*?)\s*justification:", str(groq_response), re.DOTALL)
-        label = label_match.group(1) if label_match else None
-        justification_match = re.search(r"Justification:\s*(.*)", str(groq_response), re.DOTALL)
-        justification = justification_match.group(1).strip() if justification_match else None
-        groq_response['sources'] = pip.harvested_urls
-        groq_response['label'] = re.sub(r"\s+$", "", label)
-        groq_response['label'] = str(groq_response['label']).strip()
-        label = re.sub(r"\s+$", "", label)
-        groq_response['justification'] = justification
-        groq_response['elapsed time'] = np.round((end_time-start_time) , 2)
-        groq_response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        return groq_response
+    
 
         
-    #if the connections fails to be established or the response is empty, invoke the gemini LLM.
+    #Invoke the gemini llm
     gemini_response = pip.run_gemini(external_sources, article_id)
-    # print('ANSWER IS: ')
-    # print(gemini_response['response'])
-    # print(gemini_response)
     if gemini_response:
         
         end_time = time.time()
@@ -238,22 +220,39 @@ def run_pipeline(article_id, claim, num_of_web_sources):
         justification = justification_match.group(1).strip() if justification_match else None
         gemini_response['sources'] = pip.harvested_urls
         gemini_response['label'] = re.sub(r"\s+$", "", label)
+        gemini_response['label'] = translate_label(str(gemini_response['label']))
         gemini_response['justification'] = justification
         gemini_response['elapsed time'] = np.round((end_time-start_time) , 2)
         gemini_response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         return gemini_response
+    
+    #if the connections fails to be established or the response is empty, invoke the groq api.
+    groq_response = pip.create_api(external_sources)
+    if groq_response:
+        end_time = time.time()
+        label_match = re.search(r"(?i)Result of the statement:\s*(.*?)\s*justification:", str(groq_response), re.DOTALL)
+        label = label_match.group(1) if label_match else None
+        justification_match = re.search(r"Justification:\s*(.*)", str(groq_response), re.DOTALL)
+        justification = justification_match.group(1).strip() if justification_match else None
+        groq_response['sources'] = pip.harvested_urls
+        groq_response['label'] = re.sub(r"\s+$", "", label)
+        groq_response['label'] = translate_label(str(groq_response['label']))
+        groq_response['justification'] = justification
+        groq_response['elapsed time'] = np.round((end_time-start_time) , 2)
+        groq_response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        return groq_response
 
 
     #if the connections fails to be established or the response is empty, invoke the local LLM.
     print('Running local ollama model...')
     #run the model with ollama, max sources are the number of web sources plus 2
-    answer =  pip.run_local_model(external_sources)
-    if answer:
+    ollama_response =  pip.run_local_model(external_sources)
+    if ollama_response:
         end_time = time.time()
-        answer['sources'] = pip.harvested_urls
-        answer['elapsed time'] = np.round((end_time-start_time) , 2)
-        answer["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        return answer  
+        ollama_response['sources'] = pip.harvested_urls
+        ollama_response['elapsed time'] = np.round((end_time-start_time) , 2)
+        ollama_response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        return ollama_response  
     
 
     return {"error": "All llm invokation attempts failed"} 
