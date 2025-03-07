@@ -226,15 +226,11 @@ class Harvester:
                 print('skipping procedure....')
                 continue
 
-            # print(f'''
-            
-            # Title: {title}
-            # ''')
-
+   
             
                 
             similarity_p, result_p = self.similarity_text(self.claim, body)
-            sim_sentences = self.get_relevant_sentences(self.claim, body, threshold=0.3)
+            sim_sentences = self.get_relevant_sentences(self.claim, body, threshold=0.4)
                 
            
             data = {'id': len(df),'claim_id': self.claim_id, 'title': title, 'body': body.replace("\n", " "),

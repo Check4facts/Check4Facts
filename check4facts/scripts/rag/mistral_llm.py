@@ -1,12 +1,14 @@
-
 import time
 import numpy as np
+import requests
+import json
 
-class gemini_llm:
+
+class mistral_llm:
     def __init__(self, query, external_knowledge):
 
         self.external_knowledge = external_knowledge
-
+        self.query = query
         
         self.prompt_without_rag = f'''
     
@@ -30,10 +32,10 @@ class gemini_llm:
         Avoid unnecessary details and strive to be precise and concise in your analysis. 
         Your responses should follow this format:
         Statement: 
-        Result of the statement: 
+        Statement Outcome: 
         Justification:
 
-        Your answer should be in the Greek language. Do not use the (*) symbol. 
+        Your answer should be in the Greek language, but the format in English. Do not use the (*) symbol.
 
     '''
 
@@ -65,58 +67,55 @@ class gemini_llm:
     statement: {query}
     external knowledge: {external_knowledge}
 
-    Your answer should be in the Greek. Do not use the (*) symbol. 
-    Do NOT mention specific sources, documents, or line numbers. 
-    Simply provide a well-formed justification in your own words, in a paragraph. 
+    Your answer should be in the Greek, but the format in English. Do not use the (*) symbol. 
     The justification should be a paragraph long, where you explain you reasoning.
 
-
     '''
+        
 
-
-
-
-
-
-
-
-
-
-
-    def google_llm(self, article_id):
-        print('Invoking gemini llm...')
-        import google.generativeai as genai
-        import os
-        from dotenv import load_dotenv
-        import logging
-        os.environ["GRPC_VERBOSITY"] = "none"
-        logging.getLogger("absl").setLevel(logging.CRITICAL)
-        logging.basicConfig(level=logging.ERROR)
-        load_dotenv()
-
-
+   
+    def run_mistral_llm(self, article_id):
+        print('Invoking mistral llm...')
         try:
             article_id = int(article_id)
         except ValueError:
             print("Error: article_id is not an integer")
             return None
 
-         
 
-        try:
-            genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            if self.external_knowledge is not None:
-                response = model.generate_content(self.prompt_with_rag)
-            else: 
-                response = model.generate_content(self.prompt_without_rag)
-                
+        url = "https://api.mistral.ai/v1/chat/completions"
+        API_KEY = "fcCLZs6ImebMCUApaY5lJSooyexFQvUP"  
+
+        if  self.external_knowledge is not None:
+            system_content = self.prompt_with_rag
+            content = f"Query: {self.query}\nInformation: {str(self.external_knowledge)}"
+        else:
+            system_content = self.prompt_without_rag
+            content = f"Query: {self.query}"
+        # Prepare the payload
+        payload = json.dumps({
+            "model": "mistral-large-latest", 
+            "messages": [
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": content}],
+            "temperature": 0    
+        })
+        # Set the request headers
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f"Bearer {API_KEY}"
+        }
         
-
-            
-                
-            return {"response": response.text,
+        # Send the request
+        response = requests.post(url, headers=headers, data=payload)
+        # Check for success
+        if response.status_code == 200:
+            response_json = response.json()
+            ai_message = response_json['choices'][0]['message']['content']
+            print({"response": ai_message,
+                     "article_id": article_id,  "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())})
+            return {"response": ai_message,
                      "article_id": article_id,  "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-        except Exception as e:
-                print(f"Error occured during the Gemini model invokation: {e}")
-                return None
+        else:
+            print(f"Error: {response.status_code}, {response.text}")
+            return None

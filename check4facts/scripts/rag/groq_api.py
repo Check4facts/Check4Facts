@@ -33,9 +33,15 @@ class groq_api():
 
   
         
-    def run_api(self):
-        max_retries = 10
+    def run_api(self, article_id):
+        max_retries = 5
         retries= 0
+
+        try:
+            article_id = int(article_id)
+        except ValueError:
+            print("Error: article_id is not an integer")
+            return None
 
       
 
@@ -43,8 +49,8 @@ class groq_api():
              messages = [
                         (
                             "system",
-                        f'''You have at your disposal information '[Information]' and a statement: '[User Input]' whose accuracy must be evaluated. 
-Use only the provided information in combination with your knowledge to decide whether the statement is ACCURATE, INACCURATE, RELATIVELY ACCURATE, or RELATIVELY INACCURATE.
+                        f'''You have at your disposal information '[Information]' that was found on the web, and a statement: '[User Input]' whose accuracy must be evaluated. 
+Use only the provided information from the web, in combination with your knowledge to decide whether the statement is ACCURATE, INACCURATE, RELATIVELY ACCURATE, or RELATIVELY INACCURATE.
 
 Before you decide:
 
@@ -63,7 +69,10 @@ Finally, explain your reasoning clearly and focus on the provided data and your 
 
 Statement: '[User Input]'
 Result of the statement:
-Justification:'''
+Justification:
+
+Your answer should be in Greek language. The format should be in English.
+'''
 
                         ),
                         ("human", f'''External info '{self.info}'
@@ -97,6 +106,8 @@ Your responses should follow this format:
 Statement: '[statement under examination]'
 Statement Outcome: 
 Justification:
+
+Your answer should be in Greek language. The format should be in English.
 """
 
                         ),
@@ -128,5 +139,6 @@ Justification:
         if ai_msg is None:  
             return {"response" : None}
       
-        return {"response" : ai_msg.content}
+        return {"response" : ai_msg.content, 
+                "article_id": article_id,  "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
             
