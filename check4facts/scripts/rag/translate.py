@@ -57,7 +57,19 @@ def translate(text, src_lang, target_lang):
             else:
                 return None
 
-
+#ad hoc translation for the label only, to match check4facts format
+def translate_label(text):
+    text = text.strip()
+    if 'relatively accurate' in text.lower():
+        return 'Σχετικά Ακριβές'
+    elif 'relatively inaccurate' in text.lower():
+        return 'Σχετικά Ανακριβές'
+    elif 'accurate' in text.lower():
+        return 'Ακριβές'
+    elif 'inaccurate' in text.lower():
+        return 'Ανακριβές'
+    else:
+        return str(text).strip()
 
 
 

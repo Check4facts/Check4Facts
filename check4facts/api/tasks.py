@@ -423,7 +423,8 @@ def run_rag(article_id, claim, n):
         if answer:
             print('FINAL ANSWER: ')
             print()
-            print(answer)
+            for key, value in answer.items():
+                print(f'{key}: {value}')
             return answer
         else:
             raise Exception("Pipeline returned empty result")

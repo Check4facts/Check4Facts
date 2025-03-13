@@ -6,6 +6,9 @@ from check4facts.scripts.rag.harvester import *
 from check4facts.scripts.rag.translate import *
 from check4facts.scripts.rag.groq_api import *
 from check4facts.scripts.rag.gemini_llm import *
+from check4facts.scripts.rag.ollama_llm import *
+from check4facts.scripts.rag.mistral_llm import mistral_llm
+
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import time
@@ -18,7 +21,7 @@ os.environ["OLLAMA_MODE"] = "remote"
 
 class pipeline:
 
-    def __init__(self, query, n, model="gemma2:latest"):
+    def __init__(self, query, n, model="mistral:instruct"):
         self.query = query
         self.n = n
         self.model = model
@@ -74,173 +77,199 @@ class pipeline:
             
         #print(result)
         return result
-    
-    def run_local_model(self, external_sources):
-        #external_sources = self.retrieve_knowledge(max_sources)
-        if(external_sources is not None):
-            info = "\n\n".join(external_sources)
-
-            print('\n')
-            print('------------------Harvested URLs-------------------------')
-            print(self.harvested_urls)
-            print('----------------------------------------------------------')
-            print('\n')
-            print('------------------External knowledge----------------------')
-            print(info)
-            print('----------------------------------------------------------')
-
-            input = f""" 
-"Έχεις στη διάθεσή σου μια πληροφορία '{info}' και μία δήλωση: '{self.query}' της οποίας η ακρίβεια πρέπει "
-    "να αξιολογηθεί. Χρησιμοποίησε μόνο την παρεχόμενη πληροφορία σε συνδυασμό με τις γνώσεις σου ώστε να αποφασίσεις "
-    "εάν η δήλωση είναι ΑΛΗΘΗΣ, ΨΕΥΔΗΣ, ΜΕΡΙΚΩΣ-ΑΛΗΘΗΣ ή ΜΕΡΙΚΩΣ-ΨΕΥΔΗΣ.\n\n"
-    "Πριν αποφασίσεις:\n\n"
-    "1. Ανάλυσε με σαφήνεια τη δήλωση για να κατανοήσεις το περιεχόμενό της και να εντοπίσεις τα κύρια σημεία "
-    "που πρέπει να αξιολογηθούν.\n"
-    "2. Σύγκρινε τη δήλωση με την πληροφορία που έχεις, αξιολογώντας κάθε στοιχείο της δήλωσης ξεχωριστά.\n"
-    "3. Χρησιμοποίησε τις γνώσεις σου ΜΟΝΟ σε συνδυασμό με την παρεχόμενη πληροφορία, αποφεύγοντας την αναφορά σε "
-    "μη εξακριβωμένες πληροφορίες.\n\n"
-    "Αποτέλεσμα: Δώσε μια ξεκάθαρη απάντηση επιλέγοντας μία από τις παρακάτω ετικέτες:\n\n"
-    "- ΑΛΗΘΗΣ: Αν η δήλωση είναι απόλυτα επιβεβαιωμένη από την πληροφορία και τα στοιχεία σου.\n"
-    "- ΨΕΥΔΗΣ: Αν η δήλωση διαψεύδεται ξεκάθαρα από την πληροφορία και τα στοιχεία σου.\n"
-    "- ΜΕΡΙΚΩΣ-ΑΛΗΘΗΣ: Αν η δήλωση περιέχει κάποια σωστά στοιχεία, αλλά όχι απόλυτα ακριβή.\n"
-    "- ΜΕΡΙΚΩΣ-ΨΕΥΔΗΣ: Αν η δήλωση περιέχει κάποια σωστά στοιχεία, αλλά περιέχει παραπλανητικές ή ανακριβείς πληροφορίες.\n\n"
-    "Τέλος, εξήγησε τη λογική σου με σαφήνεια και επικεντρώσου στα δεδομένα που παρέχονται και στη δική σου γνώση. "
-    "Απόφυγε περιττές λεπτομέρειες και προσπάθησε να είσαι ακριβής και περιεκτικός στην ανάλυσή σου."
-    "Οι απαντήσεις σου πρέπει να έχουν την μορφή:"
-            "Δήλωση: '{self.query}'"
-            "Αποτέλεσμα δήλωσης:" 
-            "Δικαιολόγηση:"
-    """
-
-
-            
-        else:
-
-
-            input = f""" 
-                Πάρε μία βαθιά ανάσα και έλενξε παρακάτω δήλωση: '{self.query}' 
-                Πες μου αν η δήλωση είναι αληθής, ψευδής, εν-μερει αληθής, η εν-μέρει ψευδής
-                Δείξε μου διάφορες πηγές που δικαιολογούν την απάντησή σου.
-                Οι απαντήσεις σου πρέπει να έχουν την μορφή:
-
-                Δήλωση: '{self.query}'
-                Αποτέλεσμα δήλωσης: 
-                Πηγές που υποστηρίζουν αυτήν την αξιολόγηση:
-
-                
-                """
-
         
-        while True:
-            try:
-                response = ollama.chat(model=self.model, messages=[{"role": "user", "content": translate_long_text(input, src_lang='el', target_lang='en')}])
-                break
-            except Exception as e:
-                print(e)
-                print("Retrying with smaller input....")
-                info = self.truncate_text(info)
-            
-        answer = response['message']['content']
-        answer = translate_long_text(answer, src_lang='en', target_lang='el')
-        # print()
-        print('----------------ANSWER----------------')
-        print(answer)
-
-        # Output the response from the model
-        return answer
-    
-    def create_api(self, external_sources):
-        #external_sources = self.retrieve_knowledge(max_sources)
-        
-        if(external_sources is not None):
-            info = "\n\n".join(external_sources)
-
-            print('\n')
-            print('------------------Harvested URLs----------------------')
-            print(self.harvested_urls)
-            print('----------------------------------------------------------')
-
-
-            print('\n')
-            print('------------------External knowledge----------------------')
-            print(info)
-            print('----------------------------------------------------------')
+    def run_groq(self, info, article_id):
+        if(info is not None):
+            info = "\n\n".join(info)
         else: 
-            print('No external sources found')
             info = None
         api = groq_api(info, self.query)
-
-        response = api.run_api()
-        
+        response = api.run_api(article_id)
         return response
     
-
     def run_gemini(self, info, article_id):
-
-        info = "\n\n".join(info)
-        print('\n')
-        print('------------------Harvested URLs----------------------')
-        print(self.harvested_urls)
-        print('----------------------------------------------------------')
-        print('\n')
-        print('------------------External knowledge----------------------')
-        print(info)
-        print('----------------------------------------------------------')
-
-
         gemini_instance  = gemini_llm(query=self.query, external_knowledge=info)
         answer = gemini_instance.google_llm(article_id)
         return answer
+    
+    def run_mistral(self, info, article_id):
+        mistral_instance = mistral_llm(query=self.query, external_knowledge=info)
+        answer = mistral_instance.run_mistral_llm(article_id)
+        return answer
+    
+    def run_ollama(self, info, article_id):
+        try:
+            ollama_instance = ollama_llm(query=str(self.query), external_knowledge=str(info))
+            answer = ollama_instance.run_ollama_llm(article_id)
+            return answer
+        except Exception as e:
+            print(f'Running local llm failed: {e}')
+            return None
 
 
 
 def run_pipeline(article_id, claim, num_of_web_sources):
-    start_time = time.time()  
+    
 
     if not isinstance(claim, str) or not isinstance(num_of_web_sources, int):
         print("Either claim is not a string or num_of_web_sources is not an integer.")
         return None
-    
-
-
     pip = pipeline(str(claim) , int(num_of_web_sources))
     external_sources = pip.retrieve_knowledge(int(num_of_web_sources)+2)
-
-    # make the model run on groq api
-    # response = pip.create_api(external_sources)
-    # if response:
-    #     end_time = time.time()
-    #     response['sources'] = pip.harvested_urls
-    #     response['elapsed time'] = np.round((end_time-start_time) , 2)
-    #     response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    #     return response
-
+    external_sources = external_sources.str.cat(sep=" ")
+    
+    #for debugging purposes
+    print('----------------------------EXTERNAL SOURCES HARVESTED----------------------------')
+    print(external_sources)
+    print('----------------------------------------------------------------------------------')
         
-    #if the connections fails to be established or the response is empty, invoke the gemini LLM.
+    #Invoke the gemini llm
+    start_time = time.time()  
     gemini_response = pip.run_gemini(external_sources, article_id)
-    # print('ANSWER IS: ')
-    # print(gemini_response['response'])
-    # print(gemini_response)
     if gemini_response:
+        
         end_time = time.time()
+        label_match = re.search(r"(?i)Result of the statement:\s*(.*?)\s*justification:", str(gemini_response), re.DOTALL)
+        label = label_match.group(1) if label_match else None
+        justification_match = re.search(r"Justification:\s*(.*)", str(gemini_response['response']), re.DOTALL)
+        justification = justification_match.group(1).strip() if justification_match else None
         gemini_response['sources'] = pip.harvested_urls
+        gemini_response['label'] = re.sub(r"\s+$", "", label)
+        gemini_response['label'] = translate_label(str(gemini_response['label']))
+        gemini_response['justification'] = justification
         gemini_response['elapsed time'] = np.round((end_time-start_time) , 2)
         gemini_response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         return gemini_response
+    
+    #if the connections fails to be established or the response is empty, invoke the groq api.
+    #TODO: Insert map-reduce input prompting to avoid token limitations.
+    start_time = time.time()  
+    groq_response = pip.run_groq(external_sources, article_id)
+    if groq_response:
+        end_time = time.time()
+        label_match = re.search(r"(?i)Result of the statement:\s*(.*?)\s*justification:", str(groq_response), re.DOTALL)
+        label = label_match.group(1) if label_match else None
+        justification_match = re.search(r"Justification:\s*(.*)", str(groq_response['response']), re.DOTALL)
+        justification = justification_match.group(1).strip() if justification_match else None
+        groq_response['sources'] = pip.harvested_urls
+        groq_response['label'] = re.sub(r"\s+$", "", label)
+        groq_response['label'] = translate_label(str(groq_response['label']))
+        groq_response['justification'] = justification
+        groq_response['elapsed time'] = np.round((end_time-start_time) , 2)
+        groq_response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        return groq_response
+
+    # #if the connection fails again, invoke the mistral llm
+    start_time = time.time()  
+    mistral_response = pip.run_mistral(external_sources, article_id)
+    if mistral_response:
+        end_time = time.time()
+        label_match = re.search(r"(?i)Result of the statement:\s*(.*?)\s*justification:", str(mistral_response), re.DOTALL)
+        label = label_match.group(1) if label_match else None
+        justification_match = re.search(r"Justification:\s*(.*)", str(mistral_response['response']), re.DOTALL)
+        justification = justification_match.group(1).strip() if justification_match else None
+        mistral_response['sources'] = pip.harvested_urls
+        mistral_response['label'] = re.sub(r"\s+$", "", label)
+        mistral_response['label'] = translate_label(str(mistral_response['label']).replace("/n",""))
+        mistral_response['justification'] = justification
+        mistral_response['elapsed time'] = np.round((end_time-start_time) , 2)
+        mistral_response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        return mistral_response
+
 
 
     #if the connections fails to be established or the response is empty, invoke the local LLM.
-    print('Running local ollama model...')
-    #run the model with ollama, max sources are the number of web sources plus 2
-    answer =  pip.run_local_model(external_sources)
-    if answer:
+    start_time = time.time()  
+    ollama_response =  pip.run_ollama(external_sources, article_id)
+    if ollama_response:
         end_time = time.time()
-        answer['sources'] = pip.harvested_urls
-        answer['elapsed time'] = np.round((end_time-start_time) , 2)
-        answer["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        return answer  
+        label_match = re.search(r"(?i)Result of the statement:\s*(.*?)\s*justification:", str(ollama_response), re.DOTALL)
+        label = label_match.group(1) if label_match else None
+        justification_match = re.search(r"Justification:\s*(.*)", str(ollama_response['response']), re.DOTALL)
+        justification = justification_match.group(1).strip() if justification_match else None
+        print(f"JUSTIFICATION: {justification}")
+        ollama_response['sources'] = pip.harvested_urls
+        ollama_response['label'] = translate_label(str(label))
+        ollama_response['justification'] = translate_long_text(justification, src_lang='en', target_lang='el')
+        ollama_response['elapsed time'] = np.round((end_time-start_time) , 2)
+        ollama_response["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        return ollama_response  
     
 
     return {"error": "All llm invokation attempts failed"} 
         
     
+
+    #     def run_local_model(self, external_sources):
+#         #external_sources = self.retrieve_knowledge(max_sources)
+#         if(external_sources is not None):
+#             info = "\n\n".join(external_sources)
+
+#             print('\n')
+#             print('------------------Harvested URLs-------------------------')
+#             print(self.harvested_urls)
+#             print('----------------------------------------------------------')
+#             print('\n')
+#             print('------------------External knowledge----------------------')
+#             print(info)
+#             print('----------------------------------------------------------')
+
+#             input = f""" 
+# "Έχεις στη διάθεσή σου μια πληροφορία '{info}' και μία δήλωση: '{self.query}' της οποίας η ακρίβεια πρέπει "
+#     "να αξιολογηθεί. Χρησιμοποίησε μόνο την παρεχόμενη πληροφορία σε συνδυασμό με τις γνώσεις σου ώστε να αποφασίσεις "
+#     "εάν η δήλωση είναι ΑΛΗΘΗΣ, ΨΕΥΔΗΣ, ΜΕΡΙΚΩΣ-ΑΛΗΘΗΣ ή ΜΕΡΙΚΩΣ-ΨΕΥΔΗΣ.\n\n"
+#     "Πριν αποφασίσεις:\n\n"
+#     "1. Ανάλυσε με σαφήνεια τη δήλωση για να κατανοήσεις το περιεχόμενό της και να εντοπίσεις τα κύρια σημεία "
+#     "που πρέπει να αξιολογηθούν.\n"
+#     "2. Σύγκρινε τη δήλωση με την πληροφορία που έχεις, αξιολογώντας κάθε στοιχείο της δήλωσης ξεχωριστά.\n"
+#     "3. Χρησιμοποίησε τις γνώσεις σου ΜΟΝΟ σε συνδυασμό με την παρεχόμενη πληροφορία, αποφεύγοντας την αναφορά σε "
+#     "μη εξακριβωμένες πληροφορίες.\n\n"
+#     "Αποτέλεσμα: Δώσε μια ξεκάθαρη απάντηση επιλέγοντας μία από τις παρακάτω ετικέτες:\n\n"
+#     "- ΑΚΡΙΒΗΣ: Αν η δήλωση είναι απόλυτα επιβεβαιωμένη από την πληροφορία και τα στοιχεία σου.\n"
+#     "- ΑΝΑΚΡΙΒΗΣ: Αν η δήλωση διαψεύδεται ξεκάθαρα από την πληροφορία και τα στοιχεία σου.\n"
+#     "- ΣΧΕΤΙΚΑ ΑΚΡΙΒΗΣ: Αν η δήλωση περιέχει κάποια σωστά στοιχεία, αλλά όχι απόλυτα ακριβή.\n"
+#     "- ΣΧΕΤΙΚΑ ΑΝΑΚΡΙΒΗΣ: Αν η δήλωση περιέχει κάποια σωστά στοιχεία, αλλά περιέχει παραπλανητικές ή ανακριβείς πληροφορίες.\n\n"
+#     "Τέλος, εξήγησε τη λογική σου με σαφήνεια και επικεντρώσου στα δεδομένα που παρέχονται και στη δική σου γνώση. "
+#     "Απόφυγε περιττές λεπτομέρειες και προσπάθησε να είσαι ακριβής και περιεκτικός στην ανάλυσή σου."
+#     "Οι απαντήσεις σου πρέπει να έχουν την μορφή:"
+#             "Δήλωση: '{self.query}'"
+#             "Αποτέλεσμα δήλωσης:" 
+#             "Δικαιολόγηση:"
+#     """
+
+
+            
+#         else:
+
+
+#             input = f""" 
+#                 Πάρε μία βαθιά ανάσα και έλενξε παρακάτω δήλωση: '{self.query}' 
+#                 Πες μου αν η δήλωση είναι αληθής, ψευδής, εν-μερει αληθής, η εν-μέρει ψευδής
+#                 Δείξε μου διάφορες πηγές που δικαιολογούν την απάντησή σου.
+#                 Οι απαντήσεις σου πρέπει να έχουν την μορφή:
+
+#                 Δήλωση: '{self.query}'
+#                 Αποτέλεσμα δήλωσης: 
+#                 Πηγές που υποστηρίζουν αυτήν την αξιολόγηση:
+
+                
+#                 """
+
+        
+#         while True:
+#             try:
+#                 response = ollama.chat(model=self.model, messages=[{"role": "user", "content": translate_long_text(input, src_lang='el', target_lang='en')}])
+#                 break
+#             except Exception as e:
+#                 print(e)
+#                 print("Retrying with smaller input....")
+#                 info = self.truncate_text(info)
+            
+#         answer = response['message']['content']
+#         answer = translate_long_text(answer, src_lang='en', target_lang='el')
+#         # print()
+#         print('----------------ANSWER----------------')
+#         print(answer)
+
+#         # Output the response from the model
+#         return answer

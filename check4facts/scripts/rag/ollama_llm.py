@@ -1,16 +1,18 @@
 
 import time
 import numpy as np
+import ollama
+import re
+from check4facts.scripts.text_sum.translate import translate, translate_long_text
 
-class gemini_llm:
+class ollama_llm:
     def __init__(self, query, external_knowledge):
-
         self.external_knowledge = external_knowledge
-
-        
+        self.query = query
+        self.model = "mistral:instruct"
         self.prompt_without_rag = f'''
     
-    You are given a statement: {query} that needs to be evaluated for accuracy.
+    You are given a statement: {self.query} that needs to be evaluated for accuracy.
         Use your knowledge to decide whether the statement is is ACCURATE, INACCURATE, RELATIVELY ACCURATE, or RELATIVELY INACCURATE.
 
         Before deciding:
@@ -28,18 +30,18 @@ class gemini_llm:
 
         Finally, explain your reasoning clearly, focusing on the data provided and your own knowledge. 
         Avoid unnecessary details and strive to be precise and concise in your analysis. 
-        Your responses should follow this format:
+        Your responses should follow this format in English only:
         Statement: 
-        Result of the statement: 
+        Statement Outcome: 
         Justification:
 
-        Your answer should be in the Greek language. Do not use the (*) symbol. 
+       
 
     '''
 
         self.prompt_with_rag = f'''
-    You have at your disposal information '[Information]' that was found on the web, and a statement: '[User Input]' whose accuracy must be evaluated. 
-    Use only the provided information from the web in combination with your knowledge to decide whether the statement is is ACCURATE, INACCURATE, RELATIVELY ACCURATE, or RELATIVELY INACCURATE.
+    You have at your disposal information '[Information]' and a statement: '[User Input]' whose accuracy must be evaluated. 
+    Use only the provided information in combination with your knowledge to decide whether the statement is is ACCURATE, INACCURATE, RELATIVELY ACCURATE, or RELATIVELY INACCURATE.
 
     Before you decide:
 
@@ -62,61 +64,57 @@ class gemini_llm:
     Result of the statement:
     Justification:
 
-    statement: {query}
-    external knowledge: {external_knowledge}
+    statement: {self.query}
+    external knowledge: {self.external_knowledge}
 
-    Your answer should be in the Greek. Do not use the (*) symbol. 
-    Do NOT mention specific sources, documents, or line numbers. 
-    Simply provide a well-formed justification in your own words, in a paragraph. 
-    The justification should be a paragraph long, where you explain you reasoning.
-
+    
 
     '''
+    
+    #method to remove 20% of text for cases when the input token limit is exceeded 
+    def truncate_text(self, text):
+        words = text.split()
+        total_words = len(words)
+        words_to_keep = int(total_words * 0.8)
+        truncated_text = ' '.join(words[:words_to_keep])
+        sentence_end = re.search(r'\.|\?|!$', truncated_text)  
+        if sentence_end:
+            truncated_text = truncated_text[:sentence_end.end()]
+        
+        return truncated_text
 
-
-
-
-
-
-
-
-
-
-
-    def google_llm(self, article_id):
-        print('Invoking gemini llm...')
-        import google.generativeai as genai
-        import os
-        from dotenv import load_dotenv
-        import logging
-        os.environ["GRPC_VERBOSITY"] = "none"
-        logging.getLogger("absl").setLevel(logging.CRITICAL)
-        logging.basicConfig(level=logging.ERROR)
-        load_dotenv()
-
-
+    def run_ollama_llm(self, article_id):
+        retries = 0
         try:
             article_id = int(article_id)
         except ValueError:
             print("Error: article_id is not an integer")
             return None
 
-         
 
-        try:
-            genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            if self.external_knowledge is not None:
-                response = model.generate_content(self.prompt_with_rag)
-            else: 
-                response = model.generate_content(self.prompt_without_rag)
+        print('Invoking local llm...')
+        if(self.external_knowledge is not None):
+            print('------------------External knowledge----------------------')
+            print(self.external_knowledge)
+            print('----------------------------------------------------------')
+        while retries<=3:
+            try:
+                if retries>=3:
+                    print(f'Error: Could not generate output for model: {self.model}')
+                if self.external_knowledge is not None:
+                    response = ollama.chat(model=self.model, messages=[{"role": "user", "content": self.prompt_with_rag}])
+                break
+            except Exception as e:
+                print(e)
+                print("Retrying with smaller input....")
+                self.external_knowledge = self.truncate_text(self.external_knowledge)
+                retries+=1
                 
         
+        answer = response['message']['content']
+        #answer = translate_long_text(answer, src_lang='en', target_lang='el')
+       
 
-            
-                
-            return {"response": response.text,
-                     "article_id": article_id,  "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-        except Exception as e:
-                print(f"Error occured during the Gemini model invokation: {e}")
-                return None
+        # Output the response from the model
+        return {"response": answer,
+                "article_id": article_id,  "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
