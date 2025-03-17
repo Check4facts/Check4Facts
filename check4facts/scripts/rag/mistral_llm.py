@@ -2,7 +2,7 @@ import time
 import numpy as np
 import requests
 import json
-
+import os
 
 class mistral_llm:
     def __init__(self, query, external_knowledge):
@@ -84,7 +84,7 @@ class mistral_llm:
 
 
         url = "https://api.mistral.ai/v1/chat/completions"
-        API_KEY = "fcCLZs6ImebMCUApaY5lJSooyexFQvUP"  
+        
 
         if  self.external_knowledge is not None:
             system_content = self.prompt_with_rag
@@ -103,7 +103,7 @@ class mistral_llm:
         # Set the request headers
         headers = {
             'Content-Type': 'application/json',
-            'Authorization': f"Bearer {API_KEY}"
+            'Authorization': f"Bearer {os.getenv("MISTRAL_API_KEY")}"
         }
         
         # Send the request
