@@ -28,7 +28,11 @@ def google_search(query, web_sources):
                 file_extension = None
             if file_extension not in doc_extensions and url_domain not in sites_source and not '/document/' in dict['href']:
                 urls.append(dict['href'])
-        return urls
+        if urls:
+            return urls
+        else: 
+            print('Initializing backup search....')
+            return google_search_backup(query, web_sources)
     except Exception as e:
         print(e)
         print('Initializing backup search....')
