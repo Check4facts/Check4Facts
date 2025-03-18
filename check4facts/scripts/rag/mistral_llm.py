@@ -103,7 +103,7 @@ class mistral_llm:
         # Set the request headers
         headers = {
             'Content-Type': 'application/json',
-            'Authorization': f"Bearer {os.getenv("MISTRAL_API_KEY")}"
+            'Authorization': f'''Bearer {os.getenv("MISTRAL_API_KEY")}'''
         }
         
         # Send the request

@@ -24,13 +24,10 @@ def google_search(query, web_sources):
             match = re.search(pattern, dict['href'][-6:])
             if match:
                 file_extension = match.group(1)
-                print(file_extension)
             else:
                 file_extension = None
             if file_extension not in doc_extensions and url_domain not in sites_source and not '/document/' in dict['href']:
                 urls.append(dict['href'])
-            #print(url_domain)
-
         return urls
     except Exception as e:
         print(e)
@@ -40,41 +37,34 @@ def google_search(query, web_sources):
 
 #extra search api in case the first one fails
 def google_search_backup(query, web_sources):
-    try:
-        url = "https://www.googleapis.com/customsearch/v1"
-        params = {
-            "q": query,
-            "key": os.getenv("GOOGLE_SEARCH_KEY"),
-            "cx": os.getenv("GOOGLE_CX_KEY"),
-            "num": web_sources
-        }
+    """Fetches Google search results and returns only the links."""
+    url = "https://www.googleapis.com/customsearch/v1"
+    params = {
+        "q": query,
+        "key": os.getenv("GOOGLE_SEARCH_KEY"),
+        "cx": os.getenv("GOOGLE_CX_KEY"),
+        "num": web_sources
+    }
 
-        response = requests.get(url, params=params)
-        results = response.json()
+    urls = []
 
-        if "items" not in results:
-            return []
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        results = response.json().get("items", [])
+        url_list =  [item["link"] for item in results if "link" in item]
 
-        urls = []
-        for item in results["items"]:
-            link = item["link"]
-            url_domain = urlparse(link).netloc
-
-            
-            match = re.search(pattern, link[-6:])
-            file_extension = match.group(1) if match else None
-
-            
-            if (
-                file_extension not in doc_extensions and
-                url_domain not in sites_source and
-                "/document/" not in link
-            ):
-                urls.append(link)
-
+        for url in url_list:
+            url_domain = urlparse(url).netloc
+            match = re.search(pattern, url[-6:])
+            if match:
+                file_extension = match.group(1)
+            else:
+                file_extension = None
+                print(file_extension, url_domain, url)
+            if file_extension not in doc_extensions and url_domain not in sites_source and not '/document/' in url:
+                urls.append(url)
         return urls
 
-    except Exception as e:
-        print(f"Error: {e}")
-        print('Could not find any search results')
+    else:
+        print("Error:", response.json())
         return []
