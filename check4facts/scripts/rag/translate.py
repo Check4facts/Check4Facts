@@ -5,8 +5,10 @@ import nltk
 
 # Make sure to download the Punkt tokenizer models if not already done
 
-nltk.download('punkt')
-nltk.download('punkt_tab')
+nltk.download("punkt")
+nltk.download("punkt_tab")
+
+
 # Method to split text into chunks while avoiding abrupt sentence splitting
 def split_text_into_chunks(text, max_chunk_size=100):
     sentences = nltk.sent_tokenize(text)
@@ -21,14 +23,15 @@ def split_text_into_chunks(text, max_chunk_size=100):
             current_chunk_size += sentence_length
         else:
             if current_chunk:
-                chunks.append(' '.join(current_chunk))
+                chunks.append(" ".join(current_chunk))
             current_chunk = [sentence]
             current_chunk_size = sentence_length
 
     if current_chunk:
-        chunks.append(' '.join(current_chunk))  # Add the last chunk
+        chunks.append(" ".join(current_chunk))  # Add the last chunk
 
     return chunks
+
 
 # Secondary method to handle long text translation
 def translate_long_text(text, src_lang, target_lang):
@@ -42,35 +45,37 @@ def translate_long_text(text, src_lang, target_lang):
         else:
             return None  # Return None if any chunk fails to translate
 
-    return ' '.join(translated_chunks)  # Join all translated chunks into one string
+    return " ".join(translated_chunks)  # Join all translated chunks into one string
+
 
 def translate(text, src_lang, target_lang):
     retries = 5
     for attempt in range(retries):
         try:
-            translated = GoogleTranslator(source=src_lang, target=target_lang).translate(text)
+            translated = GoogleTranslator(
+                source=src_lang, target=target_lang
+            ).translate(text)
             return translated
         except Exception as e:
             print(f"Error occurred during translation: {e}")
             if attempt < retries - 1:
-                time.sleep(2)  
+                time.sleep(2)
             else:
                 return None
 
-#ad hoc translation for the label only, to match check4facts format
+
+# ad hoc translation for the label only, to match check4facts format
 def translate_label(text):
     text = text.strip()
-    if 'relatively accurate' in text.lower():
-        return 'Σχετικά Ακριβές'
-    elif 'relatively inaccurate' in text.lower():
-        return 'Σχετικά Ανακριβές'
-    elif 'accurate' in text.lower():
-        return 'Ακριβές'
-    elif 'inaccurate' in text.lower():
-        return 'Ανακριβές'
+    if "relatively accurate" in text.lower():
+        return 3
+    elif "relatively inaccurate" in text.lower():
+        return 2
+    elif "accurate" in text.lower():
+        return 4
+    elif "inaccurate" in text.lower():
+        return 1
+    elif "unverifiable" in text.lower():
+        return 0
     else:
         return str(text).strip()
-
-
-
-
