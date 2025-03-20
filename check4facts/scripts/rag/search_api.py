@@ -60,7 +60,7 @@ def google_search(query, web_sources):
         for dict in results:
             urls.append(dict["href"])
         urls = filter_urls(urls)
-        if urls is None:
+        if urls is []:
             print("Initializing backup search....")
             return google_search_backup(query, web_sources)
         else:
