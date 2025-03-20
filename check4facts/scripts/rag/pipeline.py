@@ -113,7 +113,7 @@ class pipeline:
 
 
 def run_pipeline(article_id, claim, num_of_web_sources):
-
+    start_time = time.time()
     if not isinstance(claim, str) or not isinstance(num_of_web_sources, int):
         print("Either claim is not a string or num_of_web_sources is not an integer.")
         return None
@@ -129,13 +129,15 @@ def run_pipeline(article_id, claim, num_of_web_sources):
     print(
         "----------------------------------------------------------------------------------"
     )
+    extraction_time = np.round(
+        (time.time() - start_time),
+    )
 
     # Invoke the gemini llm
     start_time = time.time()
     gemini_response = pip.run_gemini(external_sources, article_id)
+    gemini_response = None
     if gemini_response:
-
-        end_time = time.time()
         label_match = re.search(
             r"(?i)Result of the statement:\s*(.*?)\s*justification:",
             str(gemini_response),
@@ -152,18 +154,18 @@ def run_pipeline(article_id, claim, num_of_web_sources):
         gemini_response["label"] = re.sub(r"\s+$", "", label)
         gemini_response["label"] = translate_label(str(gemini_response["label"]))
         gemini_response["justification"] = justification
-        gemini_response["llm_response_time"] = np.round((end_time - start_time), 2)
+        gemini_response["elapsed"] = (
+            np.round((time.time() - start_time), 2) + extraction_time
+        )
         gemini_response["timestamp"] = time.strftime(
             "%Y-%m-%d %H:%M:%S", time.localtime()
         )
         return gemini_response
 
     # if the connections fails to be established or the response is empty, invoke the groq api.
-    # TODO: Insert map-reduce input prompting to avoid token limitations.
     start_time = time.time()
     groq_response = pip.run_groq(external_sources, article_id)
     if groq_response:
-        end_time = time.time()
         label_match = re.search(
             r"(?i)Result of the statement:\s*(.*?)\s*justification:",
             str(groq_response),
@@ -180,7 +182,9 @@ def run_pipeline(article_id, claim, num_of_web_sources):
         groq_response["label"] = re.sub(r"\s+$", "", label)
         groq_response["label"] = translate_label(str(groq_response["label"]))
         groq_response["justification"] = justification
-        groq_response["llm_response_time"] = np.round((end_time - start_time), 2)
+        groq_response["elapsed_time"] = (
+            np.round((time.time() - start_time), 2) + extraction_time
+        )
         groq_response["timestamp"] = time.strftime(
             "%Y-%m-%d %H:%M:%S", time.localtime()
         )
@@ -190,7 +194,6 @@ def run_pipeline(article_id, claim, num_of_web_sources):
     start_time = time.time()
     mistral_response = pip.run_mistral(external_sources, article_id)
     if mistral_response:
-        end_time = time.time()
         label_match = re.search(
             r"(?i)Result of the statement:\s*(.*?)\s*justification:",
             str(mistral_response),
@@ -209,7 +212,9 @@ def run_pipeline(article_id, claim, num_of_web_sources):
             str(mistral_response["label"]).replace("/n", "")
         )
         mistral_response["justification"] = justification
-        mistral_response["llm_response_time"] = np.round((end_time - start_time), 2)
+        mistral_response["elapsed_time"] = (
+            np.round((time.time() - start_time), 2) + extraction_time
+        )
         mistral_response["timestamp"] = time.strftime(
             "%Y-%m-%d %H:%M:%S", time.localtime()
         )
@@ -219,7 +224,6 @@ def run_pipeline(article_id, claim, num_of_web_sources):
     start_time = time.time()
     ollama_response = pip.run_ollama(external_sources, article_id)
     if ollama_response:
-        end_time = time.time()
         label_match = re.search(
             r"(?i)Result of the statement:\s*(.*?)\s*justification:",
             str(ollama_response),
@@ -238,7 +242,9 @@ def run_pipeline(article_id, claim, num_of_web_sources):
         ollama_response["justification"] = translate_long_text(
             justification, src_lang="en", target_lang="el"
         )
-        ollama_response["llm_response_time"] = np.round((end_time - start_time), 2)
+        ollama_response["elapsed_time"] = (
+            np.round((time.time() - start_time), 2) + extraction_time
+        )
         ollama_response["timestamp"] = time.strftime(
             "%Y-%m-%d %H:%M:%S", time.localtime()
         )
