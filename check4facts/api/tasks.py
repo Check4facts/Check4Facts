@@ -17,10 +17,8 @@ from check4facts.scripts.text_sum.text_process import (
     extract_text_from_html,
 )
 
-#imports for rag
+# imports for rag
 from check4facts.scripts.rag.pipeline import run_pipeline
-
-
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -291,9 +289,11 @@ def summarize_text(self, article_id):
                         "summarization": answer["response"],
                         "time": answer["elapsed_time"],
                         "article_id": article_id,
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                        "timestamp": time.strftime(
+                            "%Y-%m-%d %H:%M:%S", time.localtime()
+                        ),
                     }
-                    
+
             # if everything fails, invoke the local model
             if (not api) or (answer is None):
                 result = invoke_local_llm(content, article_id)
@@ -319,7 +319,7 @@ def summarize_text(self, article_id):
 @shared_task(bind=True, ignore_result=False)
 def batch_summarize_text(self):
     from check4facts.api import dbh
-    
+
     try:
 
         # Fetch the id and content (extract_text_from_html function used)
@@ -374,6 +374,39 @@ def batch_summarize_text(self):
         print(f"Error generating summary for published articles: {e}")
 
 
+@shared_task(bind=True, ignore_result=False)
+def justify_task(self, statement_id, n):
+    from check4facts.api import dbh
+
+    text = dbh.fetch_statement_text(statement_id)
+    try:
+
+        answer = run_pipeline(statement_id, text, n)
+        if answer:
+            print("FINAL ANSWER: ")
+            print()
+            for key, value in answer.items():
+                print(f"{key}: {value}")
+
+            # Store to Database
+            dbh.insert_justification(
+                statement_id,
+                answer["justification"],
+                answer["timestamp"],
+                answer["llm_response_time"],
+                answer["label"],
+                answer["model"],
+                answer["sources"],
+            )
+        else:
+            raise Exception("Pipeline returned empty result")
+
+    except Exception as e:
+        print(f"Error during rag run: {e}")
+
+    return
+
+
 # Test tasks
 
 
@@ -416,18 +449,19 @@ def test_summarize_text(self, article_id, text):
     except Exception as e:
         print(f"An exception occurred: {e}")
 
+
 @shared_task(bind=False, ignore_result=False)
 def run_rag(article_id, claim, n):
     try:
         answer = run_pipeline(article_id, claim, n)
         if answer:
-            print('FINAL ANSWER: ')
+            print("FINAL ANSWER: ")
             print()
             for key, value in answer.items():
-                print(f'{key}: {value}')
+                print(f"{key}: {value}")
             return answer
         else:
             raise Exception("Pipeline returned empty result")
 
     except Exception as e:
-        print(f'Error during rag run: {e}')
+        print(f"Error during rag run: {e}")
