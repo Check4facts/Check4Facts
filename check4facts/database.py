@@ -402,7 +402,7 @@ class DBHandler:
         except Exception as e:
             print(f"Error fetching content from article: {e}")
             self.connection.rollback()
-            
+
     def fetch_articles_without_summary(self):
         if not self.connection:
             self.connect()
@@ -415,13 +415,61 @@ class DBHandler:
             """
             self.cursor.execute(sql)
             results = self.cursor.fetchall()
-            results = list(map(lambda item: (item[0], extract_text_from_html(item[1])), results))
+            results = list(
+                map(lambda item: (item[0], extract_text_from_html(item[1])), results)
+            )
             return results
 
         except Exception as e:
             print(f"Error fetching articles without summary: {e}")
             self.connection.rollback()
             return []
+
+    def fetch_statement_text(self, statement_id):
+        if not self.connection:
+            self.connect()
+
+        try:
+            print(f"Fetching text from stament with id: {statement_id}")
+            sql = f"""
+                SELECT s.text
+                FROM statement s
+                WHERE s.id = {statement_id}
+            """
+            self.cursor.execute(sql)
+            result = self.cursor.fetchone()[0]
+            print(f"Statement text: {result}")
+            return result
+
+        except Exception as e:
+            print(f"Error fetching text from statement: {e}")
+            self.connection.rollback()
+
+    def insert_justification(
+        self, statement_id, text, timestamp, elapsed_time, label, model, sources
+    ):
+        if not self.connection:
+            self.connect()
+
+        try:
+            print(
+                f"Inserting new justification with text: {text} for stament with id: {statement_id}"
+            )
+            sql = """
+                INSERT INTO justification (statement_id, text, timestamp, elapsed_time, label, model, sources)
+                VALUES (%s, %s, %s, %s, %s, %s, %s);
+            """
+            self.cursor.execute(
+                sql,
+                (statement_id, text, timestamp, elapsed_time, label, model, sources),
+            )
+            self.connection.commit()
+            print(
+                f"Justification for statement id: {statement_id} inserted successfully."
+            )
+        except Exception as e:
+            print(f"Error inserting justification for statement_id {statement_id}: {e}")
+            self.connection.rollback()
 
     # added extra functions for text summarization handling
 
