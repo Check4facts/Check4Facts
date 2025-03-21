@@ -393,7 +393,7 @@ def justify_task(self, statement_id, n):
                 statement_id,
                 answer["justification"],
                 answer["timestamp"],
-                answer["llm_response_time"],
+                answer["elapsed_time"],
                 answer["label"],
                 answer["model"],
                 answer["sources"],
