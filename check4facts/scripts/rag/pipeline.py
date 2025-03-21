@@ -154,8 +154,9 @@ def run_pipeline(article_id, claim, num_of_web_sources):
         gemini_response["justification"] = justification
         gemini_response["llm_response_time"] = np.round((end_time - start_time), 2)
         gemini_response["timestamp"] = time.strftime(
-            "%Y-%m-%d %H:%M:%S", time.localtime()
+            "%Y-%m-%d %H:%M:%S%z", time.localtime()
         )
+        gemini_response["model"] = "Gemini"
         return gemini_response
 
     # if the connections fails to be established or the response is empty, invoke the groq api.
@@ -182,8 +183,9 @@ def run_pipeline(article_id, claim, num_of_web_sources):
         groq_response["justification"] = justification
         groq_response["llm_response_time"] = np.round((end_time - start_time), 2)
         groq_response["timestamp"] = time.strftime(
-            "%Y-%m-%d %H:%M:%S", time.localtime()
+            "%Y-%m-%d %H:%M:%S%z", time.localtime()
         )
+        groq_response["model"] = "GROQ"
         return groq_response
 
     # #if the connection fails again, invoke the mistral llm
@@ -211,8 +213,9 @@ def run_pipeline(article_id, claim, num_of_web_sources):
         mistral_response["justification"] = justification
         mistral_response["llm_response_time"] = np.round((end_time - start_time), 2)
         mistral_response["timestamp"] = time.strftime(
-            "%Y-%m-%d %H:%M:%S", time.localtime()
+            "%Y-%m-%d %H:%M:%S%z", time.localtime()
         )
+        mistral_response["model"] = "Mistral"
         return mistral_response
 
     # if the connections fails to be established or the response is empty, invoke the local LLM.
@@ -240,8 +243,9 @@ def run_pipeline(article_id, claim, num_of_web_sources):
         )
         ollama_response["llm_response_time"] = np.round((end_time - start_time), 2)
         ollama_response["timestamp"] = time.strftime(
-            "%Y-%m-%d %H:%M:%S", time.localtime()
+            "%Y-%m-%d %H:%M:%S%z", time.localtime()
         )
+        ollama_response["model"] = "Ollama"
         return ollama_response
 
     return {"error": "All llm invokation attempts failed"}
