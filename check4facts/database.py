@@ -445,6 +445,27 @@ class DBHandler:
             print(f"Error fetching text from statement: {e}")
             self.connection.rollback()
 
+    def fetch_all_statement_texts(self):
+        if not self.connection:
+            self.connect()
+
+        try:
+            print(f"Fetching all texts from statement table...")
+            sql = """
+                SELECT s.id, s.text
+                FROM statement s
+                WHERE s.fact_checker_accuracy IS NOT NULL;
+            """
+            self.cursor.execute(sql)
+            result = self.cursor.fetchall()
+            result = [list((item[0], item[1])) for item in result]
+            print(f"Fetched {len(result)} statement texts from database!")
+            return result
+
+        except Exception as e:
+            print(f"Error fetching text from statement: {e}")
+            self.connection.rollback()
+
     def insert_justification(
         self, statement_id, text, timestamp, elapsed_time, label, model, sources
     ):

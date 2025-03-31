@@ -178,6 +178,19 @@ def create_app() -> Flask:
             202,
         )
 
+    @app.route("/batch-justify", methods=["POST"])
+    def batch_justify():
+
+        req = request.json
+
+        n = req.get("n")
+        task = batch_justify_task.apply_async(kwargs={"n": n})
+
+        return (
+            jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
+            202,
+        )
+
     # Test endpoints
 
     @app.route("/rag-test", methods=["POST"])

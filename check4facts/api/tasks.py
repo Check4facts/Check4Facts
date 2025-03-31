@@ -407,6 +407,44 @@ def justify_task(self, statement_id, n):
     return
 
 
+@shared_task(bind=True, ignore_result=False)
+def batch_justify_task(self, n):
+    from check4facts.api import dbh
+
+    # Each row is statement_id, statement_text
+    rows = dbh.fetch_all_statement_texts()
+    for row in rows:
+        # already_justified = []
+        # if int(row[0]) in already_justified:
+        #     print(f"Statement with id: {row[0]} has already a justification. Moving on...")
+        #     continue
+        try:
+
+            answer = run_pipeline(row[0], row[1], n)
+            if answer:
+                print("FINAL ANSWER: ")
+                print()
+                for key, value in answer.items():
+                    print(f"{key}: {value}")
+
+                # Store to Database
+                dbh.insert_justification(
+                    row[0],
+                    answer["justification"],
+                    answer["timestamp"],
+                    answer["elapsed_time"],
+                    answer["label"],
+                    answer["model"],
+                    answer["sources"],
+                )
+            else:
+                raise Exception("Pipeline returned empty result")
+
+        except Exception as e:
+            print(f"Error during rag run: {e}")
+    return
+
+
 # Test tasks
 
 
