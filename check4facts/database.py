@@ -530,3 +530,21 @@ class DBHandler:
         except Exception as e:
             print(f"Error deleting row: {e}")
             self.connection.rollback()
+
+    def fetch_blacklist(self):
+        if not self.connection:
+            self.connect()
+        try:
+            self.cursor.execute(
+                """SELECT url FROM justification_source WHERE black_listed is TRUE""",
+            )
+            result = self.cursor.fetchall()
+            return [row[0] for row in result]
+
+        except Exception as e:
+            print(f"Error retrieving result: {e}")
+            self.connection.rollback()
+            return []
+
+    def fetch_whitelist(self):
+        pass

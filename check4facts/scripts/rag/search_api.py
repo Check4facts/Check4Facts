@@ -3,22 +3,37 @@ from urllib.parse import urlparse
 from googleapiclient.discovery import build
 import re
 import os
+import psycopg2
+import pandas as pd
 
-sites_source = [
-    "ellinikahoaxes.gr",
-    "factcheckgreek.afp.com",
-    "check4facts.gr",
-    "factcheckcyprus.org",
-    "www.youtube.com",
-    "www.linkedin.com",
-    "m.facebook.com",
-]
+
+# sites_source = [
+#     "ellinikahoaxes.gr",
+#     "factcheckgreek.afp.com",
+#     "check4facts.gr",
+#     "factcheckcyprus.org",
+#     "www.youtube.com",
+#     "www.linkedin.com",
+#     "m.facebook.com",
+# ]
 doc_extensions = ["doc", "docx", "php", "pdf", "txt", "theFile", "file", "xls"]
 pattern = r"[./=]([a-zA-Z0-9]+)$"
 
 
+def blacklist_urls():
+    from check4facts.api import dbh
+
+    try:
+        url_list = dbh.fetch_blacklist()
+        return url_list
+    except Exception as e:
+        print(f"Error fetching blacklist: {e}")
+        return []
+
+
 def filter_urls(url_list):
-    urls = []
+    black_urls = blacklist_urls()
+    filtered_urls = []
     for url in url_list:
         url_domain = urlparse(url).netloc
         match = re.search(pattern, url[-6:])
@@ -28,11 +43,11 @@ def filter_urls(url_list):
             file_extension = None
         if (
             file_extension not in doc_extensions
-            and url_domain not in sites_source
+            and url_domain not in black_urls
             and not "/document/" in url
         ):
-            urls.append(url)
-    return urls
+            filtered_urls.append(url)
+    return filtered_urls
 
 
 def google_search_backup(query, web_sources):
