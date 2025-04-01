@@ -426,7 +426,8 @@ class DBHandler:
             self.connection.rollback()
             return []
 
-    def fetch_sources_from_articles_content(self, page_size=20):
+    def fetch_sources_from_articles_content(self, page_size=50):
+        # Method to fetch sources from articles content mapped by statement_id
         if not self.connection:
             self.connect()
 
@@ -436,23 +437,23 @@ class DBHandler:
         try:
             while True:
                 query = f"""
-                    SELECT id, content
+                    SELECT statement_id, content
                     FROM article
-                    WHERE id > {last_id}
-                    ORDER BY id
+                    WHERE statement_id > {last_id}
+                    ORDER BY statement_id
                     LIMIT {page_size};
                 """
                 self.cursor.execute(query)
                 results = self.cursor.fetchall()
-                
+
                 if not results:
                     break
                 last_id = int(results[-1][0])
-                for index, row in enumerate(results):   
-                    article_id = row[0]
+                for index, row in enumerate(results):
+                    statement_id = row[0]
                     content = row[1]
 
-                    fact_checker_sources[article_id] = []
+                    fact_checker_sources[statement_id] = []
 
                     soup = BeautifulSoup(content, "html.parser")
                     sources_element = soup.find(
@@ -462,7 +463,10 @@ class DBHandler:
                         elements_after_sources = sources_element.find_all_next()
                         for elem in elements_after_sources:
                             if elem.name == "a":
-                                fact_checker_sources[article_id].append(elem["href"])
+                                fact_checker_sources[statement_id].append(elem["href"])
+
+            # filter out empty lists
+            fact_checker_sources = {k: v for k, v in fact_checker_sources.items() if v}
             return fact_checker_sources
         except Exception as e:
             print(f"Error fetching page of articles contents: {e}")
