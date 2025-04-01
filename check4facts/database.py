@@ -1,6 +1,7 @@
 import numpy as np
 import psycopg2
 from psycopg2.extensions import register_adapter, AsIs
+from bs4 import BeautifulSoup
 import pickle
 
 from check4facts.scripts.text_sum.text_process import extract_text_from_html
@@ -424,6 +425,49 @@ class DBHandler:
             print(f"Error fetching articles without summary: {e}")
             self.connection.rollback()
             return []
+
+    def fetch_sources_from_articles_content(self, page_size=20):
+        if not self.connection:
+            self.connect()
+
+        last_id = 0
+
+        fact_checker_sources = {}
+        try:
+            while True:
+                query = f"""
+                    SELECT id, content
+                    FROM article
+                    WHERE id > {last_id}
+                    ORDER BY id
+                    LIMIT {page_size};
+                """
+                self.cursor.execute(query)
+                results = self.cursor.fetchall()
+                
+                if not results:
+                    break
+                last_id = int(results[-1][0])
+                for index, row in enumerate(results):   
+                    article_id = row[0]
+                    content = row[1]
+
+                    fact_checker_sources[article_id] = []
+
+                    soup = BeautifulSoup(content, "html.parser")
+                    sources_element = soup.find(
+                        lambda tag: tag.name and "Πηγές" in tag.get_text()
+                    )
+                    if sources_element:
+                        elements_after_sources = sources_element.find_all_next()
+                        for elem in elements_after_sources:
+                            if elem.name == "a":
+                                fact_checker_sources[article_id].append(elem["href"])
+            return fact_checker_sources
+        except Exception as e:
+            print(f"Error fetching page of articles contents: {e}")
+            self.connection.rollback()
+            return {}
 
     def fetch_statement_text(self, statement_id):
         if not self.connection:
