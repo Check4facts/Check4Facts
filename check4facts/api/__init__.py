@@ -5,6 +5,8 @@ import yaml
 from celery import Celery, Task
 from flask_cors import CORS
 from flask import Flask, request, jsonify
+import jwt
+import base64
 from check4facts.api.tasks import (
     status_task,
     analyze_task,
@@ -30,6 +32,30 @@ with open(db_path, "r") as db_f:
 dbh = DBHandler(**db_params)
 
 
+BASE64_JWT_KEY = os.getenv("JWT_SECRET_KEY")
+if not BASE64_JWT_KEY:
+    raise ValueError("JWT_SECRET_KEY is not set in the environment variables.")
+
+try:
+    SECRET_KEY = base64.b64decode(BASE64_JWT_KEY)
+except Exception as e:
+    raise ValueError(
+        "Failed to decode JWT_SECRET_KEY. Ensure it is a valid base64-encoded string."
+    ) from e
+
+
+def validate_jwt(token):
+    try:
+        decoded = jwt.decode(
+            token, SECRET_KEY, algorithms=["HS512"]
+        )  # Adjust algorithm if needed
+        return decoded  # Return decoded data if valid
+    except jwt.ExpiredSignatureError:
+        return None  # Token expired
+    except jwt.InvalidTokenError:
+        return None  # Invalid token
+
+
 def celery_init_app(app: Flask) -> Celery:
     class FlaskTask(Task):
         def __call__(self, *args: object, **kwargs: object) -> object:
@@ -45,7 +71,13 @@ def celery_init_app(app: Flask) -> Celery:
 
 def create_app() -> Flask:
     app = Flask(__name__)
-    CORS(app)
+    CORS(
+        app,
+        resources={
+            r"/*": {"origins": "*", "allow_headers": ["Authorization", "Content-Type", "x-xsrf-token"]}
+        },
+        supports_credentials=True,
+    )
     app.config.from_mapping(
         CELERY=dict(
             broker_url=os.getenv("CELERY_BROKER_URL"),
@@ -55,6 +87,25 @@ def create_app() -> Flask:
     )
     app.config.from_prefixed_env()
     celery_init_app(app)
+
+    @app.before_request
+    def handle_preflight_and_auth():
+        """Handle preflight requests and authenticate requests."""
+        if request.method == "OPTIONS":
+            # Handle CORS preflight request
+            return "", 204  # No Content response for preflight
+
+        # Authentication check
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Unauthorized"}), 401
+
+        token = auth_header.split(" ")[1]  # Extract token
+        decoded = validate_jwt(token)  # Assuming this is your function to validate JWT
+        if not decoded:
+            return jsonify({"error": "Invalid or expired token"}), 401
+
+        request.user = decoded  # Store decoded user data in request object
 
     @app.route("/analyze", methods=["POST"])
     def analyze():
