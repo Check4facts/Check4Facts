@@ -386,7 +386,7 @@ class DBHandler:
             return res
 
     def fetch_article_content(self, article_id):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         try:
@@ -404,7 +404,7 @@ class DBHandler:
             self.connection.rollback()
             
     def fetch_articles_without_summary(self):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         try:
@@ -426,7 +426,7 @@ class DBHandler:
     # added extra functions for text summarization handling
 
     def insert_summary(self, article_id, article_summary):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         try:
@@ -456,7 +456,7 @@ class DBHandler:
             self.connection.rollback()
 
     def remove_summary_by_article_id(self, article_id):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         try:
