@@ -387,7 +387,7 @@ class DBHandler:
             return res
 
     def fetch_article_content(self, article_id):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         try:
@@ -405,7 +405,7 @@ class DBHandler:
             self.connection.rollback()
 
     def fetch_articles_without_summary(self):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         try:
@@ -428,7 +428,7 @@ class DBHandler:
 
     def fetch_sources_from_articles_content(self, page_size=50):
         # Method to fetch sources from articles content mapped by statement_id
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         last_id = 0
@@ -474,7 +474,7 @@ class DBHandler:
             return {}
 
     def fetch_statement_text(self, statement_id):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         try:
@@ -494,7 +494,7 @@ class DBHandler:
             self.connection.rollback()
 
     def fetch_all_statement_texts(self):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         try:
@@ -517,7 +517,7 @@ class DBHandler:
     def insert_justification(
         self, statement_id, text, timestamp, elapsed_time, label, model, sources
     ):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         try:
@@ -543,7 +543,7 @@ class DBHandler:
     # added extra functions for text summarization handling
 
     def insert_summary(self, article_id, article_summary):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         try:
@@ -573,7 +573,7 @@ class DBHandler:
             self.connection.rollback()
 
     def remove_summary_by_article_id(self, article_id):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
 
         try:
@@ -601,7 +601,7 @@ class DBHandler:
             self.connection.rollback()
 
     def fetch_blacklist(self):
-        if not self.connection:
+        if not self.connection or self.connection.closed:
             self.connect()
         try:
             self.cursor.execute(
