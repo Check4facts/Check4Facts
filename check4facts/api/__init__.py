@@ -196,7 +196,7 @@ async def summ_endpoint(
     article_id: str, current_user: dict = Depends(get_current_user)
 ):
     print(current_user)
-    task = summarize_text.apply_async(kwargs={"article_id": article_id})
+    task = summarize_text.apply_async(kwargs={"article_id": article_id, "websocket": WebSocket})
     return {"taskId": task.id, "status": task.status, "taskInfo": task.info}
 
 
@@ -217,3 +217,22 @@ async def test_get_summ_endpoint(
         kwargs={"article_id": article_id, "text": text}
     )
     return {"task_id": result.id, "status": result.status}
+
+
+# Example: Adding a WebSocket endpoint
+@app.websocket("/ws/{task_id}")
+async def websocket_endpoint(websocket: WebSocket, task_id: str):
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_json()
+            task_type = data.get("taskType")
+            task_data = data.get("tasktData")
+            
+            if task_type == "analyze":
+                task = analyze_task()
+            # Process the data or notify tasks as needed
+            await websocket.send_text(f"Message received: {data}")
+    except WebSocketDisconnect:
+        # Handle disconnect if needed
+        pass

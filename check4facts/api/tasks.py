@@ -2,8 +2,8 @@ import os
 import time
 import yaml
 import numpy as np
-from celery import result, shared_task
 from check4facts.train import Trainer
+from celery import result, shared_task
 from check4facts.config import DirConf
 from check4facts.predict import Predictor
 from check4facts.scripts.harvest import Harvester
@@ -16,6 +16,21 @@ from check4facts.scripts.text_sum.text_process import (
     extract_text_from_html,
 )
 from check4facts.scripts.text_sum.groq_api import groq_api
+
+# This function will send progress updates to the connected WebSocket
+def send_progress_update(task_id, current, total, websocket):
+    try:
+        progress = {
+            "task_id": task_id,
+            "current": current,
+            "total": total,
+            "type": "SUMMARIZE",
+        }
+        # Send progress to the WebSocket connection
+        if websocket:
+            websocket.send_text(str(progress))  # Directly send progress to WebSocket connection
+    except Exception as e:
+        print(f"Error sending progress: {e}")
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -246,7 +261,7 @@ def intial_train_task(self):
 
 
 @shared_task(bind=True, ignore_result=False)
-def summarize_text(self, article_id):
+def summarize_text(self, article_id, websocket):
     from check4facts.api import dbh
 
     try:
@@ -261,6 +276,7 @@ def summarize_text(self, article_id):
                 "type": "SUMMARIZE",
             },
         )
+        send_progress_update(self.request.id, 1, 2, websocket)
 
         # Keep only the actual text from the article's content
         content = extract_text_from_html(content)
@@ -305,6 +321,7 @@ def summarize_text(self, article_id):
                 "type": "SUMMARIZE",
             },
         )
+        send_progress_update(self.request.id, 2, 2, websocket)
         dbh.insert_summary(article_id, result["summarization"])
         dbh.disconnect()
     except Exception as e:
