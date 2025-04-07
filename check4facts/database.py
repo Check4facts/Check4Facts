@@ -386,6 +386,26 @@ class DBHandler:
                 conn.close()
             return res
 
+    def fetch_single_statement(self, statement_id):
+        if not self.connection:
+            self.connect()
+
+        try:
+            print(f"Fetching statement with id: {statement_id}")
+            sql = f"""
+                SELECT s.text
+                FROM statement s
+                WHERE s.id = {statement_id}
+            """
+            self.cursor.execute(sql)
+            result = self.cursor.fetchone()[0]
+            print(f"Statement text: {result}")
+            return result
+
+        except Exception as e:
+            print(f"Error fetching text from statement: {e}")
+            self.connection.rollback()
+
     def fetch_article_content(self, article_id):
         if not self.connection:
             self.connect()
