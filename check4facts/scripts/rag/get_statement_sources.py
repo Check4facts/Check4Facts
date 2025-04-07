@@ -8,7 +8,7 @@ def fetch_sources_from_articles_content(page_size=50):
     DB_PARAMS = {
         "dbname": "check4facts_2",
         "user": "postgres",
-        "password": "postgres",
+        "password": "",
         "host": "localhost",
         "port": "5432",
     }
