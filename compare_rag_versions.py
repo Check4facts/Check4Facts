@@ -133,6 +133,10 @@ with engine.connect() as connection:
         alpha=0.5,
         linestyle="dashed",
     )
+    print("RAG V1 unique labels:", fact_rag1_rag2_labels_df["rag_v1_label"].unique())
+    print("RAG V2 unique labels:", fact_rag1_rag2_labels_df["rag_v2_label"].unique())
+    print("Fact checker unique labels:", fact_rag1_rag2_labels_df["fact_checker_accuracy"].unique())
+
 
     plt.xlabel("Accuracy Score")
     plt.ylabel("Density")
@@ -141,6 +145,36 @@ with engine.connect() as connection:
 
     plt.savefig(os.path.join(output_dir, "kde_rag_v1_vs_rag_v2.png"))
     print(f"KDE plot saved as {os.path.join(output_dir, 'kde_rag_v1_vs_rag_v2.png')}")
+    
+    # Set the style
+    sns.set(style="whitegrid")
+
+    # Set up the plot
+    plt.figure(figsize=(8, 5))
+
+    # Plot histograms
+    bin_edges = [i - 0.5 for i in range(6)]  # [-0.5, 0.5, 1.5, ..., 4.5] for integer bins
+
+    sns.histplot(fact_rag1_rag2_labels_df["rag_v1_label"], bins=bin_edges, stat="density", label="RAG V1",
+                color="skyblue", kde=True, element="step", linewidth=2)
+
+    sns.histplot(fact_rag1_rag2_labels_df["rag_v2_label"], bins=bin_edges, stat="density", label="RAG V2",
+                color="lightgreen", kde=True, element="step", linewidth=2)
+
+    sns.histplot(fact_rag1_rag2_labels_df["fact_checker_accuracy"], bins=bin_edges, stat="density", label="Fact Checker",
+                color="gray", kde=True, element="step", linewidth=2, linestyle="dashed")
+
+    # Set ticks to match integer classes
+    plt.xticks(range(5))
+    plt.xlim(-0.5, 4.5)
+    plt.xlabel("Accuracy Label")
+    plt.ylabel("Density")
+    plt.title("Discrete Accuracy Distribution (with KDE overlay)")
+    plt.legend()
+
+    # Save to file
+    plt.savefig(os.path.join(output_dir, "hist_rag_v1_vs_rag_v2.png"))
+    print(f"KDE/Histogram plot saved as {os.path.join(output_dir, 'hist_rag_v1_vs_rag_v2.png')}")
 
     # Plotting Scatter plot with Jittering
     plt.figure(figsize=(6, 5))
