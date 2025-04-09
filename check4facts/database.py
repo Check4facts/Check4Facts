@@ -1,7 +1,9 @@
+import json
+import select
 import numpy as np
 import psycopg2
-from psycopg2.extensions import register_adapter, AsIs
-import pickle
+from psycopg2.extensions import register_adapter, AsIs, ISOLATION_LEVEL_AUTOCOMMIT
+import asyncio
 
 from check4facts.scripts.text_sum.text_process import extract_text_from_html
 
@@ -43,11 +45,14 @@ class DBHandler:
     def __init__(self, **kwargs):
         self.connection, self.cursor = None, None
         self.conn_params = kwargs
+        self.listen_callbacks = {}
+        self.loop = asyncio.get_event_loop()
 
     def connect(self):
         try:
 
             self.connection = psycopg2.connect(**self.conn_params)
+            self.connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
             self.cursor = self.connection.cursor()
 
@@ -66,6 +71,34 @@ class DBHandler:
             print("Connection closed.")
         else:
             print("Unable to close connection. Is the connection already closed?")
+
+    def notify(self, channel, payload: str):
+        if not self.connection or self.connection.closed:
+            self.connect()
+        with self.connection.cursor() as cursor:
+            cursor.execute(f"NOTIFY {channel}, %s;", (payload,))
+
+    def listen(self, channel: str, callback):
+        """Registers a callback and starts listening to a channel"""
+        self.cursor.execute(f"LISTEN {channel};")
+        self.listen_callbacks[channel] = callback
+        self.loop.create_task(self._listen_loop())
+
+    async def _listen_loop(self):
+        print("Starting LISTEN loop...")
+        while True:
+            if select.select([self.connection], [], [], 1) == ([], [], []):
+                await asyncio.sleep(0.1)
+                continue
+
+            self.connection.poll()
+            while self.connection.notifies:
+                notify = self.connection.notifies.pop(0)
+                print(f"DEBUG: Received raw notification: {notify.payload}")
+                channel = notify.channel
+                payload = notify.payload
+                if channel in self.listen_callbacks:
+                    await self.listen_callbacks[channel](json.loads(payload))
 
     def fetch_active_tasks_ids(self):
         if not self.connection:

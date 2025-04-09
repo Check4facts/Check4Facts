@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 import os
 import jwt
 import time
@@ -32,6 +33,26 @@ with open(db_path, "r") as db_f:
     db_params = yaml.safe_load(db_f)
 dbh = DBHandler(**db_params)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    dbh.connect()
+
+    async def handle_notify(payload):
+        task_id = payload.get("task_id")
+        if task_id in connections:
+            ws = connections[task_id]
+            await ws.send_json(payload)
+
+            # ✅ If task is done, close socket and remove it
+            if payload.get("status") == "completed":
+                await ws.close(code=1000)
+                connections.pop(task_id, None)
+
+    dbh.listen("task_progress", handle_notify)
+    print("Listening on channel: task_progress")  # ← This too
+    yield
+    dbh.disconnect()
 
 BASE64_JWT_KEY = os.getenv("JWT_SECRET_KEY")
 if not BASE64_JWT_KEY:
@@ -84,7 +105,7 @@ def celery_init_app(app: FastAPI) -> Celery:
     return celery_app
 
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # Add CORS middleware (update origins as needed)
 app.add_middleware(
@@ -108,6 +129,23 @@ async def get_current_user(request: Request):
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
         )
     token = auth.split(" ")[1]
+    decoded = validate_jwt(token)
+    if not decoded:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
+        )
+    return decoded
+
+# JWT validation for WebSocket connections
+async def get_current_user_from_ws(websocket: WebSocket):
+    auth_header = websocket.headers.get("Authorization")    
+    if not auth_header or not auth_header.startswith("Bearer "):
+        # You can use WebSocketDisconnect or raise an HTTPException here, 
+        # but raising an exception during the handshake will cause a connection error.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
+    token = auth_header.split(" ")[1]
     decoded = validate_jwt(token)
     if not decoded:
         raise HTTPException(
@@ -196,7 +234,7 @@ async def summ_endpoint(
     article_id: str, current_user: dict = Depends(get_current_user)
 ):
     print(current_user)
-    task = summarize_text.apply_async(kwargs={"article_id": article_id, "websocket": WebSocket})
+    task = summarize_text.apply_async(kwargs={"article_id": article_id})
     return {"taskId": task.id, "status": task.status, "taskInfo": task.info}
 
 
@@ -219,20 +257,32 @@ async def test_get_summ_endpoint(
     return {"task_id": result.id, "status": result.status}
 
 
-# Example: Adding a WebSocket endpoint
+@app.post("/start-dummy-task")
+async def start_dummy_task_endpoint(current_user: dict = Depends(get_current_user)):
+    task = dummy_task.apply_async(kwargs={})
+    return {"taskId": task.id, "status": task.status, "taskInfo": task.info}
+
+# Dictionary to store WebSocket connections for each task
+connections = {}
+
 @app.websocket("/ws/{task_id}")
 async def websocket_endpoint(websocket: WebSocket, task_id: str):
-    await websocket.accept()
     try:
-        while True:
-            data = await websocket.receive_json()
-            task_type = data.get("taskType")
-            task_data = data.get("tasktData")
-            
-            if task_type == "analyze":
-                task = analyze_task()
-            # Process the data or notify tasks as needed
-            await websocket.send_text(f"Message received: {data}")
-    except WebSocketDisconnect:
-        # Handle disconnect if needed
-        pass
+        # Validate JWT during connection establishment
+        user = await get_current_user_from_ws(websocket)
+        print(f"User connected: {user}")
+
+        await websocket.accept()
+        connections[task_id] = websocket  # Assume you already have a connections dict
+        try:
+            while True:
+                data = await websocket.receive_text()  # Keep the connection alive or process incoming messages
+                print(f"Received data: {data}")
+        except WebSocketDisconnect:
+            print(f"WebSocket disconnected for task {task_id}")
+        finally:
+            connections.pop(task_id, None)
+    except HTTPException as exc:
+        # The connection will not be accepted if token is invalid/expired
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        print(f"Connection closed due to authentication error: {exc.detail}")

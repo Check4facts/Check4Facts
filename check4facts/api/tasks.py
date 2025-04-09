@@ -1,3 +1,4 @@
+import json
 import os
 import time
 import yaml
@@ -16,21 +17,6 @@ from check4facts.scripts.text_sum.text_process import (
     extract_text_from_html,
 )
 from check4facts.scripts.text_sum.groq_api import groq_api
-
-# This function will send progress updates to the connected WebSocket
-def send_progress_update(task_id, current, total, websocket):
-    try:
-        progress = {
-            "task_id": task_id,
-            "current": current,
-            "total": total,
-            "type": "SUMMARIZE",
-        }
-        # Send progress to the WebSocket connection
-        if websocket:
-            websocket.send_text(str(progress))  # Directly send progress to WebSocket connection
-    except Exception as e:
-        print(f"Error sending progress: {e}")
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -261,7 +247,7 @@ def intial_train_task(self):
 
 
 @shared_task(bind=True, ignore_result=False)
-def summarize_text(self, article_id, websocket):
+def summarize_text(self, article_id):
     from check4facts.api import dbh
 
     try:
@@ -276,7 +262,6 @@ def summarize_text(self, article_id, websocket):
                 "type": "SUMMARIZE",
             },
         )
-        send_progress_update(self.request.id, 1, 2, websocket)
 
         # Keep only the actual text from the article's content
         content = extract_text_from_html(content)
@@ -321,7 +306,6 @@ def summarize_text(self, article_id, websocket):
                 "type": "SUMMARIZE",
             },
         )
-        send_progress_update(self.request.id, 2, 2, websocket)
         dbh.insert_summary(article_id, result["summarization"])
         dbh.disconnect()
     except Exception as e:
@@ -427,3 +411,16 @@ def test_summarize_text(self, article_id, text):
         return result
     except Exception as e:
         print(f"An exception occurred: {e}")
+
+        
+@shared_task(bind=True, ignore_result=False)
+def dummy_task(self):
+    from check4facts.api import dbh
+    for i in range(5):
+        progress = {"task_id": self.request.id, "progress": i * 20, "status": "in_progress"}
+        dbh.notify("task_progress", json.dumps(progress))
+        time.sleep(10)
+
+    # ✅ Final notify with status=completed
+    final = {"task_id": self.request.id, "progress": 100, "status": "completed"}
+    dbh.notify("task_progress", json.dumps(final))
