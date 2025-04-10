@@ -39,15 +39,10 @@ async def lifespan(app: FastAPI):
     dbh.connect()
 
     async def handle_notify(payload):
-        task_id = payload.get("task_id")
+        task_id = payload.get("taskId")
         if task_id in connections:
             ws = connections[task_id]
             await ws.send_json(payload)
-
-            # ✅ If task is done, close socket and remove it
-            if payload.get("status") == "completed":
-                await ws.close(code=1000)
-                connections.pop(task_id, None)
 
     dbh.listen("task_progress", handle_notify)
     print("Listening on channel: task_progress")  # ← This too
