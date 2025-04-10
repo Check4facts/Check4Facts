@@ -27,6 +27,13 @@ def status_task(self, task_id):
 @shared_task(bind=True, ignore_result=False)
 def analyze_task(self, statement):
     from check4facts.api import dbh
+    progress = {
+        "taskId": self.request.id,
+        "progress": 0,
+        "status": "PROGRESS",
+        "type": "analyze",
+    }
+    dbh.notify("task_progress", json.dumps(progress))
 
     statement_id = statement.get("id")
     statement_text = statement.get("text")
@@ -41,10 +48,8 @@ def analyze_task(self, statement):
     se = SearchEngine(**search_params)
     statements = [statement_text]
 
-    self.update_state(
-        state="PROGRESS",
-        meta={"current": 1, "total": 4, "type": f"ANALYZE_{statement_id}"},
-    )
+    progress["progress"] = 20
+    dbh.notify("task_progress", json.dumps(progress))
     # Using first element only for the result cause only one statement is being checked.
     search_results = se.run(statements)[0]
 
@@ -56,10 +61,8 @@ def analyze_task(self, statement):
         {"s_id": statement_id, "s_text": statement_text, "s_resources": search_results}
     ]
 
-    self.update_state(
-        state="PROGRESS",
-        meta={"current": 2, "total": 4, "type": f"ANALYZE_{statement_id}"},
-    )
+    progress["progress"] = 40
+    dbh.notify("task_progress", json.dumps(progress))
     # Using first element only for the result cause only one statement is being checked.
     harvest_results = h.run(articles)[0]
 
@@ -77,10 +80,8 @@ def analyze_task(self, statement):
         {"s_id": statement_id, "s_text": statement_text, "s_resources": harvest_results}
     ]
 
-    self.update_state(
-        state="PROGRESS",
-        meta={"current": 3, "total": 4, "type": f"ANALYZE_{statement_id}"},
-    )
+    progress["progress"] = 60
+    dbh.notify("task_progress", json.dumps(progress))
     features_results = fe.run(statement_dicts)[0]
 
     if harvest_results.empty:
@@ -91,10 +92,8 @@ def analyze_task(self, statement):
             predict_params = yaml.safe_load(f)
         p = Predictor(**predict_params)
 
-        self.update_state(
-            state="PROGRESS",
-            meta={"current": 4, "total": 4, "type": f"ANALYZE_{statement_id}"},
-        )
+        progress["progress"] = 80
+        dbh.notify("task_progress", json.dumps(progress))
         predict_result = p.run([features_results]).loc[0, ["pred_0", "pred_1"]].values
 
     resource_records = harvest_results.to_dict("records")
@@ -107,37 +106,59 @@ def analyze_task(self, statement):
         f'[Worker: {os.getpid()}] Finished storing features results for statement id: "{statement_id}"'
     )
 
+    progress["progress"] = 100
+    progress["status"] = "SUCCESS"
+    dbh.notify("task_progress", json.dumps(progress))
+
 
 @shared_task(bind=True, ignore_result=False)
 def train_task(self):
     from check4facts.api import dbh
-
-    self.update_state(
-        state="PROGRESS", meta={"current": 1, "total": 2, "type": "TRAIN"}
-    )
+    progress = {
+        "taskId": self.request.id,
+        "progress": 0,
+        "status": "PROGRESS",
+        "type": "train",
+    }
+    dbh.notify("task_progress", json.dumps(progress))
+    
     path = os.path.join(DirConf.CONFIG_DIR, "train_config.yml")
     with open(path, "r") as f:
         train_params = yaml.safe_load(f)
     t = Trainer(**train_params)
+    
+    progress["progress"] = 33
+    dbh.notify("task_progress", json.dumps(progress))
 
     features_records = dbh.fetch_statement_features(train_params["features"])
     features = np.vstack([np.hstack(f) for f in features_records])
     labels = dbh.fetch_statement_labels()
     t.run(features, labels)
+    
+    progress["progress"] = 66
+    dbh.notify("task_progress", json.dumps(progress))
 
     if not os.path.exists(DirConf.MODELS_DIR):
         os.mkdir(DirConf.MODELS_DIR)
     fname = t.best_model["clf"] + "_" + time.strftime("%Y-%m-%d-%H:%M") + ".joblib"
     path = os.path.join(DirConf.MODELS_DIR, fname)
     t.save_best_model(path)
-    self.update_state(
-        state="PROGRESS", meta={"current": 2, "total": 2, "type": "TRAIN"}
-    )
+    
+    progress["progress"] = 100
+    progress["status"] = "SUCCESS"
+    dbh.notify("task_progress", json.dumps(progress))
 
 
 @shared_task(bind=True, ignore_result=False)
 def intial_train_task(self):
     from check4facts.api import dbh
+    progress = {
+        "taskId": self.request.id,
+        "progress": 0,
+        "status": "PROGRESS",
+        "type": "train",
+    }
+    dbh.notify("task_progress", json.dumps(progress))
 
     # Initialize all python modules.
     path = os.path.join(DirConf.CONFIG_DIR, "search_config.yml")  # when using uwsgi.
@@ -159,40 +180,23 @@ def intial_train_task(self):
     statements = dbh.fetch_statements()
     total_count = len(statements)
     counter = 0
-    self.update_state(
-        state="PROGRESS",
-        meta={"current": 1, "total": (4 * total_count) + 1, "type": "INITIAL_TRAIN"},
-    )
 
     # Execute all steps for each statement.
     for statement in statements:
         statement_id, text, true_label = statement[0], statement[1], statement[2]
         counter += 1
+        
+        progress["progress"] = counter / total_count * 100
+        dbh.notify("task_progress", json.dumps(progress))
 
         print(f"Starting search for {statement_id}")
 
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "current": (4 * counter) + 1,
-                "total": (4 * total_count) + 1,
-                "type": "INITIAL_TRAIN",
-            },
-        )
         search_results = se.run([text])[0]
 
         print(f"Starting harvest for {statement_id}")
         articles = [
             {"s_id": statement_id, "s_text": text, "s_resources": search_results}
         ]
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "current": (4 * counter) + 2,
-                "total": (4 * total_count) + 1,
-                "type": "INITIAL_TRAIN",
-            },
-        )
         harvest_results = h.run(articles)[0]
 
         print(f"Saving Harvest Results to db  for {statement_id}")
@@ -203,26 +207,10 @@ def intial_train_task(self):
         statement_dicts = [
             {"s_id": statement_id, "s_text": text, "s_resources": harvest_results}
         ]
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "current": (4 * counter) + 3,
-                "total": (4 * total_count) + 1,
-                "type": "INITIAL_TRAIN",
-            },
-        )
         features_results = fe.run(statement_dicts)[0]
 
         print(f"Saving Feature Results to db for {statement_id}")
         dbh.insert_statement_features(statement_id, features_results, None, true_label)
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "current": (4 * counter) + 4,
-                "total": (4 * total_count) + 1,
-                "type": "INITIAL_TRAIN",
-            },
-        )
 
     print(f"Initiating model training.")
     path = os.path.join(DirConf.CONFIG_DIR, "train_config.yml")
@@ -241,6 +229,9 @@ def intial_train_task(self):
     path = os.path.join(DirConf.MODELS_DIR, fname)
     t.save_best_model(path)
     print(f"Successfully saved the best model.")
+        
+    progress["status"] = "SUCCESS"
+    dbh.notify("task_progress", json.dumps(progress))
 
 
 # Tasks for text summarization
@@ -251,24 +242,29 @@ def summarize_text(self, article_id):
     from check4facts.api import dbh
 
     try:
+        progress = {
+            "taskId": self.request.id,
+            "progress": 0,
+            "status": "PROGRESS",
+            "type": "summarize",
+        }
+        dbh.notify("task_progress", json.dumps(progress))
         content = dbh.fetch_article_content(article_id)
 
-        answer = None
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "current": 1,
-                "total": 2,
-                "type": "SUMMARIZE",
-            },
-        )
+        progress["progress"] = 20
+        dbh.notify("task_progress", json.dumps(progress))
 
         # Keep only the actual text from the article's content
         content = extract_text_from_html(content)
+        progress["progress"] = 40
+        dbh.notify("task_progress", json.dumps(progress))
 
         # invoke Gemini llm
         print("Trying to invoke gemini llm....")
         answer = google_llm(article_id, content)
+        
+        progress["progress"] = 60
+        dbh.notify("task_progress", json.dumps(progress))
         if answer:
             result = {
                 "summarization": answer["summarization"],
@@ -297,16 +293,15 @@ def summarize_text(self, article_id):
         print(
             f"Finished generating summary in: {result['time']} seconds. Storing in database..."
         )
+        
+        progress["progress"] = 80
+        dbh.notify("task_progress", json.dumps(progress))
 
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "current": 2,
-                "total": 2,
-                "type": "SUMMARIZE",
-            },
-        )
         dbh.insert_summary(article_id, result["summarization"])
+        progress["progress"] = 100
+        progress["status"] = "SUCCESS"
+        dbh.notify("task_progress", json.dumps(progress))
+        
         dbh.disconnect()
     except Exception as e:
         print(f"Error generating summary for article with id {article_id}: {e}")
@@ -417,10 +412,10 @@ def test_summarize_text(self, article_id, text):
 def dummy_task(self):
     from check4facts.api import dbh
     for i in range(5):
-        progress = {"task_id": self.request.id, "progress": i * 20, "status": "in_progress"}
+        progress = {"taskId": self.request.id, "progress": i * 20, "status": "PROGRESS"}
         dbh.notify("task_progress", json.dumps(progress))
         time.sleep(10)
 
-    # ✅ Final notify with status=completed
-    final = {"task_id": self.request.id, "progress": 100, "status": "completed"}
+    # ✅ Final notify with status=SUCCESS
+    final = {"taskId": self.request.id, "progress": 100, "status": "SUCCESS"}
     dbh.notify("task_progress", json.dumps(final))
