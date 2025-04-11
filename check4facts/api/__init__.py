@@ -149,15 +149,13 @@ async def get_current_user(request: Request):
     return decoded
 
 # JWT validation for WebSocket connections
-async def get_current_user_from_ws(websocket: WebSocket):
-    auth_header = websocket.headers.get("Authorization")    
-    if not auth_header or not auth_header.startswith("Bearer "):
+async def get_current_user_from_ws(token: str): 
+    if not token:
         # You can use WebSocketDisconnect or raise an HTTPException here, 
         # but raising an exception during the handshake will cause a connection error.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
         )
-    token = auth_header.split(" ")[1]
     decoded = validate_jwt(token)
     if not decoded:
         raise HTTPException(
@@ -277,10 +275,10 @@ async def start_dummy_task_endpoint(current_user: dict = Depends(get_current_use
 @app.websocket("/ws/{task_id}")
 async def websocket_endpoint(websocket: WebSocket, task_id: str):
     try:
-        # TODO: JWT token as query parameter
         # Validate JWT during connection establishment
-        # user = await get_current_user_from_ws(websocket)
-        # print(f"User connected: {user}")
+        token = websocket.query_params.get("token")
+        user = await get_current_user_from_ws(token)
+        print(f"User connected: {user}")
         
         try:
             await websocket.accept()
