@@ -1,3 +1,5 @@
+from asyncio import Queue
+from collections import defaultdict
 from contextlib import asynccontextmanager
 import os
 import jwt
@@ -33,6 +35,10 @@ with open(db_path, "r") as db_f:
     db_params = yaml.safe_load(db_f)
 dbh = DBHandler(**db_params)
 
+# Dictionary to store WebSocket connections for each task
+connections = {}
+message_queues = defaultdict(Queue)  # task_id -> asyncio.Queue of pending messages
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -40,9 +46,20 @@ async def lifespan(app: FastAPI):
 
     async def handle_notify(payload):
         task_id = payload.get("taskId")
+        message = payload  # already a dict
+
+        # Always queue the message
+        await message_queues[task_id].put(message)
+        print(f"Queued for {task_id}: {payload}")
+
+        # If there's an active WebSocket, send it
         if task_id in connections:
             ws = connections[task_id]
-            await ws.send_json(payload)
+            # Empty the queue to avoid duplicate messages
+            while not message_queues[task_id].empty():
+                msg = await message_queues[task_id].get()
+                await ws.send_json(msg)
+
 
     dbh.listen("task_progress", handle_notify)
     print("Listening on channel: task_progress")  # ← This too
@@ -158,7 +175,7 @@ async def analyze_endpoint(
     return {
         "status": "PROGRESS",
         "taskId": task.task_id,
-        "taskInfo": {"current": 1, "total": 4, "type": statement.get("id")},
+        "taskInfo": {"current": 1, "total": 4, "type": f"{statement.get('id')}"},
     }
 
 
@@ -257,26 +274,34 @@ async def start_dummy_task_endpoint(current_user: dict = Depends(get_current_use
     task = dummy_task.apply_async(kwargs={})
     return {"taskId": task.id, "status": task.status, "taskInfo": task.info}
 
-# Dictionary to store WebSocket connections for each task
-connections = {}
-
 @app.websocket("/ws/{task_id}")
 async def websocket_endpoint(websocket: WebSocket, task_id: str):
     try:
+        # TODO: JWT token as query parameter
         # Validate JWT during connection establishment
-        user = await get_current_user_from_ws(websocket)
-        print(f"User connected: {user}")
-
-        await websocket.accept()
-        connections[task_id] = websocket  # Assume you already have a connections dict
+        # user = await get_current_user_from_ws(websocket)
+        # print(f"User connected: {user}")
+        
         try:
+            await websocket.accept()
+
+            connections[task_id] = websocket
+
+            # Send any buffered messages
+            queue = message_queues[task_id]
+            while not queue.empty():
+                msg = await queue.get()
+                print(f"Flushing queued message for {task_id}: {msg}")
+                await websocket.send_json(msg)
+
+            # Keep connection alive (optional receive)
             while True:
-                data = await websocket.receive_text()  # Keep the connection alive or process incoming messages
-                print(f"Received data: {data}")
+                await websocket.receive_text()
         except WebSocketDisconnect:
-            print(f"WebSocket disconnected for task {task_id}")
+            print(f"WebSocket disconnected: {task_id}")
         finally:
             connections.pop(task_id, None)
+            message_queues.pop(task_id, None)
     except HTTPException as exc:
         # The connection will not be accepted if token is invalid/expired
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
