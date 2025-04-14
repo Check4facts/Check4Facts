@@ -1,4 +1,3 @@
-from asyncio import Queue
 from collections import defaultdict
 from contextlib import asynccontextmanager
 import os
@@ -37,13 +36,26 @@ dbh = DBHandler(**db_params)
 
 # Dictionary to store WebSocket connections for each task
 connections = {}
-message_queues = defaultdict(Queue)  # task_id -> asyncio.Queue of pending messages
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     dbh.connect()
-    print("Lifespan: Database connected")  # ← This too
+    print("Lifespan: Database connected")
+
+    # 🧠 Ensure task_messages table exists only once at startup
+    try:
+        dbh.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS task_messages (
+                id SERIAL PRIMARY KEY,
+                task_id UUID NOT NULL,
+                payload JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        print("Ensured task_messages table exists at startup.")
+    except Exception as e:
+        print(f"Error creating task_messages table: {e}")
     yield
     dbh.disconnect()
 
@@ -257,18 +269,10 @@ async def start_dummy_task_endpoint(current_user: dict = Depends(get_current_use
 async def websocket_endpoint(websocket: WebSocket, task_id: str):
 
     async def handle_notify(payload):
-
-        # Always queue the message
-        await message_queues[task_id].put(payload)
-        print(f"Queued for {task_id}: {payload}")
-
         # If there's an active WebSocket, send it
         if task_id in connections:
             ws = connections[task_id]
-            # Empty the queue to avoid duplicate messages
-            while not message_queues[task_id].empty():
-                msg = await message_queues[task_id].get()
-                await ws.send_json(msg)
+            await ws.send_json(payload)
                 
 
     try:
@@ -279,16 +283,19 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
         
         try:
             await websocket.accept()
-
             connections[task_id] = websocket
+            
+            # Fetch missed messages from the DB
+            dbh.cursor.execute(
+                "SELECT payload FROM task_messages WHERE task_id = %s ORDER BY created_at",
+                (task_id,)
+            )
+            rows = dbh.cursor.fetchall()
+            for row in rows:
+                print(f"Flushing stored message for {task_id}: {row[0]}")
+                await websocket.send_json(row[0])
+            
             dbh.listen(task_channel_name(task_id), handle_notify)
-
-            # Send any buffered messages
-            queue = message_queues[task_id]
-            while not queue.empty():
-                msg = await queue.get()
-                print(f"Flushing queued message for {task_id}: {msg}")
-                await websocket.send_json(msg)
 
             # Keep connection alive (optional receive)
             while True:
@@ -298,7 +305,6 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
         finally:
             dbh.unlisten(task_channel_name(task_id))
             connections.pop(task_id, None)
-            message_queues.pop(task_id, None)
     except HTTPException as exc:
         # The connection will not be accepted if token is invalid/expired
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)

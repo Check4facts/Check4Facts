@@ -42,6 +42,13 @@ add_numpy_adapters()
 def task_channel_name(task_id: str) -> str:
     return f"task_channel_{task_id.replace('-', '_')}"
 
+def extract_task_id_from_channel(channel: str) -> str:
+    prefix = "task_channel_"
+    if channel.startswith(prefix):
+        suffix = channel[len(prefix):]
+        return suffix.replace("_", "-")
+    raise ValueError(f"Invalid channel name: {channel}")
+
 
 class DBHandler:
 
@@ -81,6 +88,16 @@ class DBHandler:
 
         self.cursor.execute(f"NOTIFY {channel}, %s;", (payload,))
         print(f"DEBUG: Sending notification to channel {channel}: {payload}")
+
+        try:
+            task_id = extract_task_id_from_channel(channel)
+            self.cursor.execute(
+                "INSERT INTO task_messages (task_id, payload) VALUES (%s, %s);",
+                (task_id, json.dumps(payload))
+            )
+            print(f"DEBUG: Saved task message for {task_id}")
+        except Exception as e:
+            print(f"DEBUG: Could not insert task message: {e}")
 
     def listen(self, channel: str, callback):
         """Registers a callback and starts listening to a task_id"""
