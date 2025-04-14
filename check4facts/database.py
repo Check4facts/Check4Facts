@@ -39,6 +39,9 @@ def add_numpy_adapters():
 # Register the adapters
 add_numpy_adapters()
 
+def task_channel_name(task_id: str) -> str:
+    return f"task_channel_{task_id.replace('-', '_')}"
+
 
 class DBHandler:
 
@@ -75,14 +78,21 @@ class DBHandler:
     def notify(self, channel, payload: str):
         if not self.connection or self.connection.closed:
             self.connect()
-        with self.connection.cursor() as cursor:
-            cursor.execute(f"NOTIFY {channel}, %s;", (payload,))
+
+        self.cursor.execute(f"NOTIFY {channel}, %s;", (payload,))
+        print(f"DEBUG: Sending notification to channel {channel}: {payload}")
 
     def listen(self, channel: str, callback):
-        """Registers a callback and starts listening to a channel"""
+        """Registers a callback and starts listening to a task_id"""
+        print(f"DEBUG: Listening to channel {channel}")
         self.cursor.execute(f"LISTEN {channel};")
         self.listen_callbacks[channel] = callback
         self.loop.create_task(self._listen_loop())
+        
+    def unlisten(self, channel: str):
+        print(f"DEBUG: Unlistening from channel {channel}")
+        self.cursor.execute(f"UNLISTEN {channel};")
+        self.listen_callbacks.pop(channel, None)
 
     async def _listen_loop(self):
         print("Starting LISTEN loop...")

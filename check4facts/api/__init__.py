@@ -10,7 +10,7 @@ from celery import Celery
 from dotenv import load_dotenv
 from check4facts.api.tasks import *
 from check4facts.config import DirConf
-from check4facts.database import DBHandler
+from check4facts.database import DBHandler, task_channel_name
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import (
@@ -43,26 +43,7 @@ message_queues = defaultdict(Queue)  # task_id -> asyncio.Queue of pending messa
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     dbh.connect()
-
-    async def handle_notify(payload):
-        task_id = payload.get("taskId")
-        message = payload  # already a dict
-
-        # Always queue the message
-        await message_queues[task_id].put(message)
-        print(f"Queued for {task_id}: {payload}")
-
-        # If there's an active WebSocket, send it
-        if task_id in connections:
-            ws = connections[task_id]
-            # Empty the queue to avoid duplicate messages
-            while not message_queues[task_id].empty():
-                msg = await message_queues[task_id].get()
-                await ws.send_json(msg)
-
-
-    dbh.listen("task_progress", handle_notify)
-    print("Listening on channel: task_progress")  # ← This too
+    print("Lifespan: Database connected")  # ← This too
     yield
     dbh.disconnect()
 
@@ -274,6 +255,22 @@ async def start_dummy_task_endpoint(current_user: dict = Depends(get_current_use
 
 @app.websocket("/ws/{task_id}")
 async def websocket_endpoint(websocket: WebSocket, task_id: str):
+
+    async def handle_notify(payload):
+
+        # Always queue the message
+        await message_queues[task_id].put(payload)
+        print(f"Queued for {task_id}: {payload}")
+
+        # If there's an active WebSocket, send it
+        if task_id in connections:
+            ws = connections[task_id]
+            # Empty the queue to avoid duplicate messages
+            while not message_queues[task_id].empty():
+                msg = await message_queues[task_id].get()
+                await ws.send_json(msg)
+                
+
     try:
         # Validate JWT during connection establishment
         token = websocket.query_params.get("token")
@@ -284,6 +281,7 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
             await websocket.accept()
 
             connections[task_id] = websocket
+            dbh.listen(task_channel_name(task_id), handle_notify)
 
             # Send any buffered messages
             queue = message_queues[task_id]
@@ -298,6 +296,7 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
         except WebSocketDisconnect:
             print(f"WebSocket disconnected: {task_id}")
         finally:
+            dbh.unlisten(task_channel_name(task_id))
             connections.pop(task_id, None)
             message_queues.pop(task_id, None)
     except HTTPException as exc:
