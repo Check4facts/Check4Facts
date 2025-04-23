@@ -210,6 +210,15 @@ def create_app() -> Flask:
             202,
         )
 
+    @app.route("/rag-batch", methods=["GET"])
+    def get_rag_2():
+
+        task = run_batch_rag.apply_async(kwargs={})
+        return (
+            jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
+            202,
+        )
+
     @app.route("/test/summarize", methods=["POST"])
     def test_get_summ():
         json = request.json

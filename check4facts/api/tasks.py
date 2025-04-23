@@ -19,6 +19,7 @@ from check4facts.scripts.text_sum.text_process import (
 
 # imports for rag
 from check4facts.scripts.rag.pipeline import run_pipeline
+from check4facts.scripts.rag.batch_process import testing
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -503,3 +504,13 @@ def run_rag(article_id, claim, n):
 
     except Exception as e:
         print(f"Error during rag run: {e}")
+
+
+@shared_task(bind=False, ignore_result=False)
+def run_batch_rag():
+    try:
+        testing()
+    except Exception as e:
+        print(f"Error during batch rag run: {e}")
+
+    pass

@@ -47,11 +47,14 @@ class pipeline:
         return truncated_text
 
     # based on a claim, implement a searcher and a harvester
-    def retrieve_knowledge(self, max_sources):
+    def retrieve_knowledge(self, max_sources, provided_urls):
 
-        # scan the web for urls containing knowledge
+        if provided_urls is None:
+            # scan the web for urls containing knowledge
+            url_list = google_search(self.query, self.n + 1)
+        elif provided_urls is not None:
+            url_list = provided_urls
 
-        url_list = google_search(self.query, self.n + 1)
         if url_list is None:
             print(
                 "Could not find any results regarding the claim. Please try again or choose a different statement"
@@ -78,7 +81,6 @@ class pipeline:
                 print("Could not find relevant sources.")
                 return None
 
-        # print(result)
         return result
 
     def run_groq(self, info, article_id):
@@ -112,14 +114,20 @@ class pipeline:
             return None
 
 
-def run_pipeline(article_id, claim, num_of_web_sources):
+def run_pipeline(article_id, claim, num_of_web_sources, provided_urls):
     start_time = time.time()
     if not isinstance(claim, str) or not isinstance(num_of_web_sources, int):
         print("Either claim is not a string or num_of_web_sources is not an integer.")
         return None
     pip = pipeline(str(claim), int(num_of_web_sources))
-    external_sources = pip.retrieve_knowledge(int(num_of_web_sources) + 2)
-    external_sources = external_sources.str.cat(sep=" ")
+    if provided_urls is None:
+        external_sources = pip.retrieve_knowledge(int(num_of_web_sources) + 2, None)
+        external_sources = external_sources.str.cat(sep=" ")
+    elif provided_urls is not None:
+        external_sources = pip.retrieve_knowledge(
+            int(num_of_web_sources) + 2, provided_urls
+        )
+        external_sources = external_sources.str.cat(sep=" ")
 
     # for debugging purposes
     print(

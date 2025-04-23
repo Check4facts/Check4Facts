@@ -16,7 +16,8 @@ import pandas as pd
 #     "www.linkedin.com",
 #     "m.facebook.com",
 # ]
-doc_extensions = ["doc", "docx", "php", "pdf", "txt", "theFile", "file", "xls"]
+# doc_extensions = ["doc", "docx", "php", "pdf", "txt", "theFile", "file", "xls"]
+doc_extensions = []
 pattern = r"[./=]([a-zA-Z0-9]+)$"
 
 
