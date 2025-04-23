@@ -254,6 +254,27 @@ async def batch_summ_endpoint(current_user: dict = Depends(get_current_user)):
     return {"taskId": task.id, "status": task.status, "taskInfo": task.info}
 
 
+@app.post("/justify")
+async def justify_endpoint(
+    json: dict, current_user: dict = Depends(get_current_user)
+):
+    statement_id = json["statement_id"]
+    n = json["n"]
+    log.info(f"Received justify task for statement id : {statement_id} with {n} sources from User : {current_user['sub']}")
+    task = justify_task.apply_async(kwargs={"statement_id": statement_id, "n": n})
+    return {"taskId": task.id, "status": task.status, "taskInfo": task.info}
+
+
+@app.post("/batch-justify")
+async def batch_justify_endpoint(
+    json: dict, current_user: dict = Depends(get_current_user)
+):
+    n = json["n"]
+    log.info(f"Received batch-justify task with {n} sources from User : {current_user['sub']}")
+    task = batch_justify_task.apply_async(kwargs={"n": n})
+    return {"taskId": task.id, "status": task.status, "taskInfo": task.info}
+
+
 # Test endpoints
 @app.post("/test/summarize")
 async def test_get_summ_endpoint(
@@ -266,6 +287,24 @@ async def test_get_summ_endpoint(
     )
     return {"task_id": result.id, "status": result.status}
 
+
+@app.post("/rag-test")
+async def test_get_rag_endpoint(
+    json: dict, current_user: dict = Depends(get_current_user)
+):
+    claim = json["text"]
+    n = json["n"]
+    article_id = json["article_id"]
+    result = run_rag.apply_async(
+        kwargs={"article_id": article_id, "claim": claim, "n": n}
+    )
+    return {"task_id": result.id, "status": result.status}
+
+
+@app.post("/rag-batch")
+async def test_get_rag_batch_endpoint(current_user: dict = Depends(get_current_user)):
+    task = run_batch_rag.apply_async(kwargs={})
+    return{"taskId": task.id, "status": task.status, "taskInfo": task.info}
 
 @app.post("/start-dummy-task")
 async def start_dummy_task_endpoint(current_user: dict = Depends(get_current_user)):

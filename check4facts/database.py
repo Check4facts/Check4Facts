@@ -3,8 +3,9 @@ import select
 import asyncio
 import numpy as np
 import psycopg2
-from check4facts.logging import get_logger
 from psycopg2.extensions import register_adapter, AsIs, ISOLATION_LEVEL_AUTOCOMMIT
+from bs4 import BeautifulSoup
+from check4facts.logging import get_logger
 
 from check4facts.scripts.text_sum.text_process import extract_text_from_html
 
@@ -448,6 +449,26 @@ class DBHandler:
                 conn.close()
             return res
 
+    def fetch_single_statement(self, statement_id):
+        if not self.connection:
+            self.connect()
+
+        try:
+            print(f"Fetching statement with id: {statement_id}")
+            sql = f"""
+                SELECT s.text
+                FROM statement s
+                WHERE s.id = {statement_id}
+            """
+            self.cursor.execute(sql)
+            result = self.cursor.fetchone()[0]
+            print(f"Statement text: {result}")
+            return result
+
+        except Exception as e:
+            print(f"Error fetching text from statement: {e}")
+            self.connection.rollback()
+
     def fetch_article_content(self, article_id):
         if not self.connection or self.connection.closed:
             self.connect()
@@ -465,7 +486,7 @@ class DBHandler:
         except Exception as e:
             log.error(f"Error fetching content from article: {e}")
             self.connection.rollback()
-            
+
     def fetch_articles_without_summary(self):
         if not self.connection or self.connection.closed:
             self.connect()
@@ -478,13 +499,129 @@ class DBHandler:
             """
             self.cursor.execute(sql)
             results = self.cursor.fetchall()
-            results = list(map(lambda item: (item[0], extract_text_from_html(item[1])), results))
+            results = list(
+                map(lambda item: (item[0], extract_text_from_html(item[1])), results)
+            )
             return results
 
         except Exception as e:
             log.error(f"Error fetching articles without summary: {e}")
             self.connection.rollback()
             return []
+
+    def fetch_sources_from_articles_content(self, page_size=50):
+        # Method to fetch sources from articles content mapped by statement_id
+        if not self.connection or self.connection.closed:
+            self.connect()
+
+        last_id = 0
+
+        fact_checker_sources = {}
+        try:
+            while True:
+                query = f"""
+                    SELECT statement_id, content
+                    FROM article
+                    WHERE statement_id > {last_id}
+                    ORDER BY statement_id
+                    LIMIT {page_size};
+                """
+                self.cursor.execute(query)
+                results = self.cursor.fetchall()
+
+                if not results:
+                    break
+                last_id = int(results[-1][0])
+                for index, row in enumerate(results):
+                    statement_id = row[0]
+                    content = row[1]
+
+                    fact_checker_sources[statement_id] = []
+
+                    soup = BeautifulSoup(content, "html.parser")
+                    sources_element = soup.find(
+                        lambda tag: tag.name and "Πηγές" in tag.get_text()
+                    )
+                    if sources_element:
+                        elements_after_sources = sources_element.find_all_next()
+                        for elem in elements_after_sources:
+                            if elem.name == "a":
+                                fact_checker_sources[statement_id].append(elem["href"])
+
+            # filter out empty lists
+            fact_checker_sources = {k: v for k, v in fact_checker_sources.items() if v}
+            return fact_checker_sources
+        except Exception as e:
+            print(f"Error fetching page of articles contents: {e}")
+            self.connection.rollback()
+            return {}
+
+    def fetch_statement_text(self, statement_id):
+        if not self.connection or self.connection.closed:
+            self.connect()
+
+        try:
+            print(f"Fetching text from stament with id: {statement_id}")
+            sql = f"""
+                SELECT s.text
+                FROM statement s
+                WHERE s.id = {statement_id}
+            """
+            self.cursor.execute(sql)
+            result = self.cursor.fetchone()[0]
+            print(f"Statement text: {result}")
+            return result
+
+        except Exception as e:
+            print(f"Error fetching text from statement: {e}")
+            self.connection.rollback()
+
+    def fetch_all_statement_texts(self):
+        if not self.connection or self.connection.closed:
+            self.connect()
+
+        try:
+            print(f"Fetching all texts from statement table...")
+            sql = """
+                SELECT s.id, s.text
+                FROM statement s
+                WHERE s.fact_checker_accuracy IS NOT NULL;
+            """
+            self.cursor.execute(sql)
+            result = self.cursor.fetchall()
+            result = [list((item[0], item[1])) for item in result]
+            print(f"Fetched {len(result)} statement texts from database!")
+            return result
+
+        except Exception as e:
+            print(f"Error fetching text from statement: {e}")
+            self.connection.rollback()
+
+    def insert_justification(
+        self, statement_id, text, timestamp, elapsed_time, label, model, sources
+    ):
+        if not self.connection or self.connection.closed:
+            self.connect()
+
+        try:
+            print(
+                f"Inserting new justification with text: {text} for stament with id: {statement_id}"
+            )
+            sql = """
+                INSERT INTO justification (statement_id, text, timestamp, elapsed_time, label, model, sources)
+                VALUES (%s, %s, %s, %s, %s, %s, %s);
+            """
+            self.cursor.execute(
+                sql,
+                (statement_id, text, timestamp, elapsed_time, label, model, sources),
+            )
+            self.connection.commit()
+            print(
+                f"Justification for statement id: {statement_id} inserted successfully."
+            )
+        except Exception as e:
+            print(f"Error inserting justification for statement_id {statement_id}: {e}")
+            self.connection.rollback()
 
     # added extra functions for text summarization handling
 
@@ -545,3 +682,21 @@ class DBHandler:
         except Exception as e:
             log.error(f"Error deleting row: {e}")
             self.connection.rollback()
+
+    def fetch_blacklist(self):
+        if not self.connection or self.connection.closed:
+            self.connect()
+        try:
+            self.cursor.execute(
+                """SELECT url FROM justification_source WHERE black_listed is TRUE""",
+            )
+            result = self.cursor.fetchall()
+            return [row[0] for row in result]
+
+        except Exception as e:
+            print(f"Error retrieving result: {e}")
+            self.connection.rollback()
+            return []
+
+    def fetch_whitelist(self):
+        pass
