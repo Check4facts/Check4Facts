@@ -11,6 +11,7 @@ from check4facts.scripts.harvest import Harvester
 from check4facts.scripts.search import SearchEngine
 from check4facts.scripts.features import FeaturesExtractor
 from check4facts.database import task_channel_name
+from check4facts.logging import get_logger
 
 # imports for text summarization
 from check4facts.scripts.text_sum.local_llm import invoke_local_llm, google_llm
@@ -19,6 +20,7 @@ from check4facts.scripts.text_sum.text_process import (
 )
 from check4facts.scripts.text_sum.groq_api import groq_api
 
+log = get_logger()
 
 @shared_task(bind=True, ignore_result=False)
 def status_task(self, task_id):
@@ -39,7 +41,7 @@ def analyze_task(self, statement):
     statement_id = statement.get("id")
     statement_text = statement.get("text")
 
-    print(
+    log.info(
         f'[Worker: {os.getpid()}] Started analyze procedure for statement id: "{statement_id}"'
     )
 
@@ -68,7 +70,7 @@ def analyze_task(self, statement):
     harvest_results = h.run(articles)[0]
 
     if harvest_results.empty:
-        print(
+        log.info(
             f'[Worker: {os.getpid()}] No resources found for statement id: "{statement_id}"'
         )
     #     return
@@ -99,11 +101,11 @@ def analyze_task(self, statement):
 
     resource_records = harvest_results.to_dict("records")
     dbh.insert_statement_resources(statement_id, resource_records)
-    print(
+    log.info(
         f'[Worker: {os.getpid()}] Finished storing harvest results for statement id: "{statement_id}"'
     )
     dbh.insert_statement_features(statement_id, features_results, predict_result, None)
-    print(
+    log.info(
         f'[Worker: {os.getpid()}] Finished storing features results for statement id: "{statement_id}"'
     )
 
@@ -261,7 +263,7 @@ def summarize_text(self, article_id):
         dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
 
         # invoke Gemini llm
-        print("Trying to invoke gemini llm....")
+        log.debug("Trying to invoke gemini llm....")
         answer = google_llm(article_id, content)
         
         progress["progress"] = 60
@@ -275,7 +277,7 @@ def summarize_text(self, article_id):
             }
         else:
             # try invoking the groq llm
-            print("Trying to invoke groq llm....")
+            log.info("Trying to invoke groq llm....")
             api = groq_api()
             if api:
                 answer = api.run(content)
@@ -291,7 +293,7 @@ def summarize_text(self, article_id):
             if (not api) or (answer is None):
                 result = invoke_local_llm(content, article_id)
 
-        print(
+        log.info(
             f"Finished generating summary in: {result['time']} seconds. Storing in database..."
         )
         
@@ -305,7 +307,7 @@ def summarize_text(self, article_id):
         
         dbh.disconnect()
     except Exception as e:
-        print(f"Error generating summary for article with id {article_id}: {e}")
+        log.error(f"Error generating summary for article with id {article_id}: {e}")
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -318,9 +320,9 @@ def batch_summarize_text(self):
         # from all published articles and null summary
         articles = dbh.fetch_articles_without_summary()
 
-        print(f"Total articles fetched: {len(articles)}")
+        log.info(f"Total articles fetched: {len(articles)}")
         for index, article in enumerate(articles):
-            print(
+            log.info(
                 f"Processing article {index + 1}/{len(articles)} with id: {article[0]}"
             )
             article_id, content = article[0], article[1]
@@ -334,7 +336,7 @@ def batch_summarize_text(self):
                 },
             )
             # invoke Gemini llm
-            print("Trying to invoke gemini llm....")
+            log.info("Trying to invoke gemini llm....")
             answer = google_llm(article_id, content)
             if answer:
                 result = {
@@ -356,14 +358,14 @@ def batch_summarize_text(self):
                         ),
                     }
 
-            print(result["summarization"])
+            log.info(result["summarization"])
             dbh.insert_summary(article_id, result["summarization"])
             time.sleep(5)
 
         dbh.disconnect()
 
     except Exception as e:
-        print(f"Error generating summary for published articles: {e}")
+        log.error(f"Error generating summary for published articles: {e}")
 
 
 # Test tasks

@@ -1,11 +1,14 @@
 import json
 import select
+import asyncio
 import numpy as np
 import psycopg2
+from check4facts.logging import get_logger
 from psycopg2.extensions import register_adapter, AsIs, ISOLATION_LEVEL_AUTOCOMMIT
-import asyncio
 
 from check4facts.scripts.text_sum.text_process import extract_text_from_html
+
+log = get_logger()
 
 
 # Functions to adapt NumPy types
@@ -69,25 +72,25 @@ class DBHandler:
             self.cursor.execute("SELECT version();")
 
             db_version = self.cursor.fetchone()
-            print(f"Connected to: {db_version}")
+            log.info(f"Connected to: {db_version}")
 
         except Exception as e:
-            print(f"Error: {e}")
+            log.error(f"Error: {e}")
 
     def disconnect(self):
         if self.connection:
             self.cursor.close()
             self.connection.close()
-            print("Connection closed.")
+            log.info("Connection closed.")
         else:
-            print("Unable to close connection. Is the connection already closed?")
+            log.warning("Unable to close connection. Is the connection already closed?")
 
     def notify(self, channel, payload: str):
         if not self.connection or self.connection.closed:
             self.connect()
 
         self.cursor.execute(f"NOTIFY {channel}, %s;", (payload,))
-        print(f"DEBUG: Sending notification to channel {channel}: {payload}")
+        log.debug(f"Sending notification to channel {channel}: {payload}")
 
         try:
             task_id = extract_task_id_from_channel(channel)
@@ -95,24 +98,24 @@ class DBHandler:
                 "INSERT INTO task_messages (task_id, payload) VALUES (%s, %s);",
                 (task_id, json.dumps(payload))
             )
-            print(f"DEBUG: Saved task message for {task_id}")
+            log.debug(f"Saved task message for {task_id}")
         except Exception as e:
-            print(f"DEBUG: Could not insert task message: {e}")
+            log.error(f"Could not insert task message: {e}")
 
     def listen(self, channel: str, callback):
         """Registers a callback and starts listening to a task_id"""
-        print(f"DEBUG: Listening to channel {channel}")
+        log.debug(f"Listening to channel {channel}")
         self.cursor.execute(f"LISTEN {channel};")
         self.listen_callbacks[channel] = callback
         self.loop.create_task(self._listen_loop())
         
     def unlisten(self, channel: str):
-        print(f"DEBUG: Unlistening from channel {channel}")
+        log.debug(f"Unlistening from channel {channel}")
         self.cursor.execute(f"UNLISTEN {channel};")
         self.listen_callbacks.pop(channel, None)
 
     async def _listen_loop(self):
-        print("Starting LISTEN loop...")
+        log.debug("Starting LISTEN loop...")
         while True:
             if select.select([self.connection], [], [], 1) == ([], [], []):
                 await asyncio.sleep(0.1)
@@ -121,7 +124,7 @@ class DBHandler:
             self.connection.poll()
             while self.connection.notifies:
                 notify = self.connection.notifies.pop(0)
-                print(f"DEBUG: Received raw notification: {notify.payload}")
+                log.debug(f"Received raw notification: {notify.payload}")
                 channel = notify.channel
                 payload = notify.payload
                 if channel in self.listen_callbacks:
@@ -145,7 +148,7 @@ class DBHandler:
                 response.append(row[0])
 
         except Exception as e:
-            print(f"Error fetching active celery tasks: {e}")
+            log.error(f"Error fetching active celery tasks: {e}")
             self.connection.rollback()
             return []
 
@@ -178,7 +181,7 @@ class DBHandler:
             conn.commit()
             cur.close()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
@@ -372,7 +375,7 @@ class DBHandler:
             conn.commit()
             cur.close()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
@@ -387,7 +390,7 @@ class DBHandler:
             res = cur.fetchall()
             conn.commit()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
@@ -403,7 +406,7 @@ class DBHandler:
             res = [r[0] for r in cur.fetchall()]
             conn.commit()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
@@ -420,7 +423,7 @@ class DBHandler:
             conn.commit()
             cur.close()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
@@ -439,7 +442,7 @@ class DBHandler:
             conn.commit()
             cur.close()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
@@ -460,7 +463,7 @@ class DBHandler:
             return result
 
         except Exception as e:
-            print(f"Error fetching content from article: {e}")
+            log.error(f"Error fetching content from article: {e}")
             self.connection.rollback()
             
     def fetch_articles_without_summary(self):
@@ -479,7 +482,7 @@ class DBHandler:
             return results
 
         except Exception as e:
-            print(f"Error fetching articles without summary: {e}")
+            log.error(f"Error fetching articles without summary: {e}")
             self.connection.rollback()
             return []
 
@@ -498,21 +501,21 @@ class DBHandler:
             )
             row = self.cursor.fetchone()
             if row and row[0]:
-                print(
+                log.debug(
                     "Summary already exists in the for this article_id. Deleting previous registrations..."
                 )
                 self.remove_summary_by_article_id(article_id)
 
-            print("Inserting summary....")
+            log.debug("Inserting summary....")
             query = """
             UPDATE article SET summary = %s WHERE id = %s;
             """
             self.cursor.execute(query, (article_summary, article_id))
             self.connection.commit()
-            print(f"Summary with article id: {article_id} inserted successfully.")
+            log.info(f"Summary with article id: {article_id} inserted successfully.")
 
         except Exception as e:
-            print(f"Error inserting summary: {e}")
+            log.error(f"Error inserting summary: {e}")
             self.connection.rollback()
 
     def remove_summary_by_article_id(self, article_id):
@@ -533,12 +536,12 @@ class DBHandler:
             """
                 self.cursor.execute(query, (article_id,))
                 self.connection.commit()
-                print(f"Summary with article id: {article_id} deleted successfully.")
+                log.debug(f"Summary with article id: {article_id} deleted successfully.")
             else:
-                print(
+                log.warning(
                     f"Cannot delete summary for article id: {article_id}. Summary doesn't exist"
                 )
                 self.connection.rollback()
         except Exception as e:
-            print(f"Error deleting row: {e}")
+            log.error(f"Error deleting row: {e}")
             self.connection.rollback()

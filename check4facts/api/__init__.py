@@ -9,6 +9,7 @@ from celery import Celery
 from dotenv import load_dotenv
 from check4facts.api.tasks import *
 from check4facts.config import DirConf
+from check4facts.logging import get_logger
 from check4facts.database import DBHandler, task_channel_name
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -27,6 +28,8 @@ This is responsible for creating the API layer app for our python module Check4F
 """
 
 load_dotenv(dotenv_path="../../.env")
+log = get_logger()
+log.info(f"Environment: {os.getenv('ENV', 'production')}")
 
 
 db_path = os.path.join(DirConf.CONFIG_DIR, "db_config.yml")  # while using uwsgi
@@ -41,7 +44,7 @@ connections = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     dbh.connect()
-    print("Lifespan: Database connected")
+    log.info("Lifespan: Database connected")
 
     # 🧠 Ensure task_messages table exists only once at startup
     try:
@@ -53,9 +56,9 @@ async def lifespan(app: FastAPI):
                 created_at TIMESTAMP DEFAULT NOW()
             );
         """)
-        print("Ensured task_messages table exists at startup.")
+        log.info("Ensured task_messages table exists at startup.")
     except Exception as e:
-        print(f"Error creating task_messages table: {e}")
+        log.error(f"Error creating task_messages table: {e}")
     yield
     dbh.disconnect()
 
@@ -162,6 +165,7 @@ async def get_current_user_from_ws(token: str):
 async def analyze_endpoint(
     statement: dict, current_user: dict = Depends(get_current_user)
 ):
+    log.info(f"Received analyze task for statement id: {statement.get('id')} from User : {current_user['sub']}")
     task = analyze_task.apply_async(kwargs={"statement": statement})
     return {
         "status": "PROGRESS",
@@ -172,6 +176,7 @@ async def analyze_endpoint(
 
 @app.post("/train")
 async def train_endpoint(current_user: dict = Depends(get_current_user)):
+    log.info(f"Received train task from User : {current_user['sub']}")
     task = train_task.apply_async(
         task_id=f"train_task_on_{time.strftime('%Y-%m-%d-%H:%M')}"
     )
@@ -184,6 +189,7 @@ async def train_endpoint(current_user: dict = Depends(get_current_user)):
 
 @app.get("/intial-train")
 async def initial_train_endpoint(current_user: dict = Depends(get_current_user)):
+    log.info(f"Received initial-train task from User : {current_user['sub']}")
     total = dbh.count_statements()
     task = intial_train_task.apply_async()
     return {
@@ -236,13 +242,14 @@ async def fetch_active_tasks_endpoint(current_user: dict = Depends(get_current_u
 async def summ_endpoint(
     article_id: str, current_user: dict = Depends(get_current_user)
 ):
-    print(current_user)
+    log.info(f"Received summarize task for article id : {article_id} from User : {current_user['sub']}")
     task = summarize_text.apply_async(kwargs={"article_id": article_id})
     return {"taskId": task.id, "status": task.status, "taskInfo": task.info}
 
 
 @app.post("/batch-summarize")
 async def batch_summ_endpoint(current_user: dict = Depends(get_current_user)):
+    log.info(f"Received batch-summarize task from User : {current_user['sub']}")
     task = batch_summarize_text.apply_async(kwargs={})
     return {"taskId": task.id, "status": task.status, "taskInfo": task.info}
 
@@ -279,7 +286,7 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
         # Validate JWT during connection establishment
         token = websocket.query_params.get("token")
         user = await get_current_user_from_ws(token)
-        print(f"User connected: {user}")
+        log.info(f"User connected: {user['sub']}")
         
         try:
             await websocket.accept()
@@ -292,7 +299,7 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
             )
             rows = dbh.cursor.fetchall()
             for row in rows:
-                print(f"Flushing stored message for {task_id}: {row[0]}")
+                log.debug(f"Flushing stored message for {task_id}: {row[0]}")
                 await websocket.send_json(row[0])
             
             dbh.listen(task_channel_name(task_id), handle_notify)
@@ -300,12 +307,15 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
             # Keep connection alive (optional receive)
             while True:
                 await websocket.receive_text()
-        except WebSocketDisconnect:
-            print(f"WebSocket disconnected: {task_id}")
+        except WebSocketDisconnect as exc:
+            if exc.code == 1000:
+                log.info(f"WebSocket closed gracefully: {task_id}")
+            else:
+                log.error(f"WebSocket disconnected unexpectedly: {task_id} : {exc}")
         finally:
             dbh.unlisten(task_channel_name(task_id))
             connections.pop(task_id, None)
     except HTTPException as exc:
         # The connection will not be accepted if token is invalid/expired
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        print(f"Connection closed due to authentication error: {exc.detail}")
+        log.error(f"Connection closed due to authentication error: {exc.detail}")
