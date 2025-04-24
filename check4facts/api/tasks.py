@@ -377,87 +377,27 @@ def batch_summarize_text(self):
 @shared_task(bind=True, ignore_result=False)
 def justify_task(self, statement_id, n):
     from check4facts.api import dbh
+    progress = {
+        "taskId": self.request.id,
+        "progress": 0,
+        "status": "PROGRESS",
+        "type": "justify",
+    }
+    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
 
     text = dbh.fetch_statement_text(statement_id)
     try:
 
-        answer = run_pipeline(statement_id, text, n)
-        if answer:
-            print("FINAL ANSWER: ")
-            print()
-            for key, value in answer.items():
-                print(f"{key}: {value}")
-
-            # Store to Database
-            dbh.insert_justification(
-                statement_id,
-                answer["justification"],
-                answer["timestamp"],
-                answer["elapsed_time"],
-                answer["label"],
-                answer["model"],
-                answer["sources"],
-            )
-        else:
-            raise Exception("Pipeline returned empty result")
-
-    except Exception as e:
-        print(f"Error during rag run: {e}")
-
-    return
-
-
-@shared_task(bind=True, ignore_result=False)
-def batch_justify_task(self, n):
-    from check4facts.api import dbh
-
-    # Each row is statement_id, statement_text
-    rows = dbh.fetch_all_statement_texts()
-    for row in rows:
-        # already_justified = []
-        # if int(row[0]) in already_justified:
-        #     print(f"Statement with id: {row[0]} has already a justification. Moving on...")
-        #     continue
-        try:
-
-            answer = run_pipeline(row[0], row[1], n)
-            if answer:
-                print("FINAL ANSWER: ")
-                print()
-                for key, value in answer.items():
-                    print(f"{key}: {value}")
-
-                # Store to Database
-                dbh.insert_justification(
-                    row[0],
-                    answer["justification"],
-                    answer["timestamp"],
-                    answer["elapsed_time"],
-                    answer["label"],
-                    answer["model"],
-                    answer["sources"],
-                )
-            else:
-                raise Exception("Pipeline returned empty result")
-
-        except Exception as e:
-            print(f"Error during rag run: {e}")
-    return
-
-
-@shared_task(bind=True, ignore_result=False)
-def justify_task(self, statement_id, n):
-    from check4facts.api import dbh
-
-    text = dbh.fetch_statement_text(statement_id)
-    try:
-
+        progress["progress"] = 40
+        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
         answer = run_pipeline(statement_id, text, n, None)
         if answer:
-            print("FINAL ANSWER: ")
-            print()
+            
+            progress["progress"] = 80
+            dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+            log.debug("FINAL ANSWER: ")
             for key, value in answer.items():
-                print(f"{key}: {value}")
+                log.debug(f"{key}: {value}")
 
             # Store to Database
             dbh.insert_justification(
@@ -469,11 +409,15 @@ def justify_task(self, statement_id, n):
                 answer["model"],
                 answer["sources"],
             )
+            
+            progress["progress"] = 100
+            progress["status"] = "SUCCESS"
+            dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
         else:
             raise Exception("Pipeline returned empty result")
 
     except Exception as e:
-        print(f"Error during rag run: {e}")
+        log.error(f"Error during rag run: {e}")
 
     return
 
@@ -493,10 +437,9 @@ def batch_justify_task(self, n):
 
             answer = run_pipeline(row[0], row[1], n, None)
             if answer:
-                print("FINAL ANSWER: ")
-                print()
+                log.debug("FINAL ANSWER: ")
                 for key, value in answer.items():
-                    print(f"{key}: {value}")
+                    log.debug(f"{key}: {value}")
 
                 # Store to Database
                 dbh.insert_justification(
@@ -512,7 +455,7 @@ def batch_justify_task(self, n):
                 raise Exception("Pipeline returned empty result")
 
         except Exception as e:
-            print(f"Error during rag run: {e}")
+            log.error(f"Error during rag run: {e}")
     return
 
 

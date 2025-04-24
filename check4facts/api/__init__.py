@@ -258,7 +258,7 @@ async def batch_summ_endpoint(current_user: dict = Depends(get_current_user)):
 async def justify_endpoint(
     json: dict, current_user: dict = Depends(get_current_user)
 ):
-    statement_id = json["statement_id"]
+    statement_id = json["id"]
     n = json["n"]
     log.info(f"Received justify task for statement id : {statement_id} with {n} sources from User : {current_user['sub']}")
     task = justify_task.apply_async(kwargs={"statement_id": statement_id, "n": n})

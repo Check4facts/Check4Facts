@@ -552,7 +552,7 @@ class DBHandler:
             fact_checker_sources = {k: v for k, v in fact_checker_sources.items() if v}
             return fact_checker_sources
         except Exception as e:
-            print(f"Error fetching page of articles contents: {e}")
+            log.error(f"Error fetching page of articles contents: {e}")
             self.connection.rollback()
             return {}
 
@@ -561,7 +561,7 @@ class DBHandler:
             self.connect()
 
         try:
-            print(f"Fetching text from stament with id: {statement_id}")
+            log.debug(f"Fetching text from stament with id: {statement_id}")
             sql = f"""
                 SELECT s.text
                 FROM statement s
@@ -569,11 +569,11 @@ class DBHandler:
             """
             self.cursor.execute(sql)
             result = self.cursor.fetchone()[0]
-            print(f"Statement text: {result}")
+            log.debug(f"Statement text: {result}")
             return result
 
         except Exception as e:
-            print(f"Error fetching text from statement: {e}")
+            log.error(f"Error fetching text from statement: {e}")
             self.connection.rollback()
 
     def fetch_all_statement_texts(self):
@@ -581,7 +581,7 @@ class DBHandler:
             self.connect()
 
         try:
-            print(f"Fetching all texts from statement table...")
+            log.debug(f"Fetching all texts from statement table...")
             sql = """
                 SELECT s.id, s.text
                 FROM statement s
@@ -590,11 +590,11 @@ class DBHandler:
             self.cursor.execute(sql)
             result = self.cursor.fetchall()
             result = [list((item[0], item[1])) for item in result]
-            print(f"Fetched {len(result)} statement texts from database!")
+            log.debug(f"Fetched {len(result)} statement texts from database!")
             return result
 
         except Exception as e:
-            print(f"Error fetching text from statement: {e}")
+            log.error(f"Error fetching text from statement: {e}")
             self.connection.rollback()
 
     def insert_justification(
@@ -604,7 +604,7 @@ class DBHandler:
             self.connect()
 
         try:
-            print(
+            log.info(
                 f"Inserting new justification with text: {text} for stament with id: {statement_id}"
             )
             sql = """
@@ -616,11 +616,11 @@ class DBHandler:
                 (statement_id, text, timestamp, elapsed_time, label, model, sources),
             )
             self.connection.commit()
-            print(
+            log.info(
                 f"Justification for statement id: {statement_id} inserted successfully."
             )
         except Exception as e:
-            print(f"Error inserting justification for statement_id {statement_id}: {e}")
+            log.error(f"Error inserting justification for statement_id {statement_id}: {e}")
             self.connection.rollback()
 
     # added extra functions for text summarization handling
