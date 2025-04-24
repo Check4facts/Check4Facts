@@ -193,6 +193,21 @@ def create_app() -> Flask:
 
     # Test endpoints
 
+    @app.route("/new-rag-test", methods=["POST"])
+    def new_rag_test():
+        data = request.get_json()
+        claim = data.get("text", "")
+        n = data.get("n", 3)
+        article_id = data.get("article_id", 9999)
+        print(f"article_id: {article_id}, claim: {claim}, n: {n}")  # Debugging
+        task = new_rag_run.apply_async(
+            kwargs={"article_id": article_id, "claim": claim, "n": n}
+        )
+        return (
+            jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
+            202,
+        )
+
     @app.route("/rag-test", methods=["POST"])
     def get_rag():
 

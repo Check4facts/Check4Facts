@@ -17,9 +17,12 @@ from check4facts.scripts.text_sum.text_process import (
     extract_text_from_html,
 )
 
-# imports for rag
+# imports for RAG
 from check4facts.scripts.rag.pipeline import run_pipeline
 from check4facts.scripts.rag.batch_process import testing
+
+# imports for new RAG pipeline
+from check4facts.scripts.web_crawler_rag.crawl4ai import crawl4ai
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -514,3 +517,22 @@ def run_batch_rag():
         print(f"Error during batch rag run: {e}")
 
     pass
+
+
+# Tasks for new RAG pipeline
+@shared_task(bind=False, ignore_result=False)
+def new_rag_run(article_id, claim, n):
+    try:
+        crawler = crawl4ai(claim=claim, web_sources=n, article_id=article_id)
+        answer = crawler.run_crawler()
+        if answer:
+            print("FINAL ANSWER: ")
+            print()
+            for key, value in answer.items():
+                print(f"{key}: {value}")
+            return answer
+        else:
+            raise Exception("Pipeline returned empty result")
+
+    except Exception as e:
+        print(f"Error during new rag run: {e}")

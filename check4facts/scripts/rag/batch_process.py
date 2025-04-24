@@ -19,15 +19,6 @@ def testing():
 
     for statement_id, urls in grouped_urls.items():
 
-        # if statement_id in df2.index:
-        #     print("Already processed")
-        #     continue
-
-        # for url in urls:
-        #     if "https://www.icao.int/environmental-protection" in url:
-        #         urls.remove(url)
-
-        # fetch statement claim from statement table
         claim = dbh.fetch_single_statement(statement_id)
         print(
             f"""

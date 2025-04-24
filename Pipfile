@@ -46,6 +46,11 @@ ollama = "*"
 sentence-transformers = "*"
 stanza = "*"
 tiktoken = "*"
+crawl4ai = "*"
+markdown = "*"
 
 [requires]
 python_version = "3.10"
+
+[pipenv]
+allow_prereleases = true
