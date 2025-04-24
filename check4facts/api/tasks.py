@@ -313,6 +313,8 @@ def summarize_text(self, article_id):
         
         dbh.disconnect()
     except Exception as e:
+        progress["status"] = "FAILURE"
+        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
         log.error(f"Error generating summary for article with id {article_id}: {e}")
 
 
@@ -417,6 +419,8 @@ def justify_task(self, statement_id, n):
             raise Exception("Pipeline returned empty result")
 
     except Exception as e:
+        progress["status"] = "FAILURE"
+        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
         log.error(f"Error during rag run: {e}")
 
     return
