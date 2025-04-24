@@ -7,10 +7,10 @@ def fetch_sources_from_articles_content(page_size=50):
     # Database connection parameters
     DB_PARAMS = {
         "dbname": "check4facts_2",
-        "user": "postgres",
+        "user": "",
         "password": "",
-        "host": "localhost",
-        "port": "5432",
+        "host": "",
+        "port": "",
     }
 
     fact_checker_sources = {}

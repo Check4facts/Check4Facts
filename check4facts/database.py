@@ -637,3 +637,19 @@ class DBHandler:
 
     def fetch_whitelist(self):
         pass
+
+    def fetch_ground_truth_label(self, statement_id):
+        if not self.connection or self.connection.closed:
+            self.connect()
+        try:
+            self.cursor.execute(
+                """SELECT fact_checker_accuracy FROM statement WHERE id = %s""",
+                (statement_id,),
+            )
+            result = self.cursor.fetchone()[0]
+
+            return int(result)
+        except Exception as e:
+            print(f"Error retrieving result: {e}")
+            self.connection.rollback()
+            return None

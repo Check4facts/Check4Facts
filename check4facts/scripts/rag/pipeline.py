@@ -158,6 +158,7 @@ def run_pipeline(article_id, claim, num_of_web_sources, provided_urls):
             justification_match.group(1).strip() if justification_match else None
         )
         gemini_response["sources"] = pip.harvested_urls
+        gemini_response["external_sources"] = external_sources
         gemini_response["label"] = re.sub(r"\s+$", "", label)
         gemini_response["label"] = translate_label(str(gemini_response["label"]))
         gemini_response["justification"] = justification
@@ -187,6 +188,7 @@ def run_pipeline(article_id, claim, num_of_web_sources, provided_urls):
             justification_match.group(1).strip() if justification_match else None
         )
         groq_response["sources"] = pip.harvested_urls
+        groq_response["external_sources"] = external_sources
         groq_response["label"] = re.sub(r"\s+$", "", label)
         groq_response["label"] = translate_label(str(groq_response["label"]))
         groq_response["justification"] = justification
@@ -216,6 +218,7 @@ def run_pipeline(article_id, claim, num_of_web_sources, provided_urls):
             justification_match.group(1).strip() if justification_match else None
         )
         mistral_response["sources"] = pip.harvested_urls
+        mistral_response["external_sources"] = external_sources
         mistral_response["label"] = re.sub(r"\s+$", "", label)
         mistral_response["label"] = translate_label(
             str(mistral_response["label"]).replace("/n", "")

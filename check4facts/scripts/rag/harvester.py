@@ -149,9 +149,6 @@ class Harvester:
     def similarity_text(self, claim, texts):
         claim_emb = single_text_embedding(claim)
 
-        # spaw to texts se paragrafous kai vriskw most similar paragraph
-        # for each paragraph spaw se protaseis? kai vriskw similar sentence
-
         paragraphs = texts.split("\n")
         # sentences = sent_tokenize(texts)
 
@@ -232,7 +229,7 @@ class Harvester:
                 continue
 
             similarity_p, result_p = self.similarity_text(self.claim, body)
-            sim_sentences = self.get_relevant_sentences(self.claim, body, threshold=0.4)
+            sim_sentences = self.get_relevant_sentences(self.claim, body, threshold=0.1)
 
             data = {
                 "id": len(df),
