@@ -9,8 +9,7 @@ def testing():
 
     index = 0
     results_list = []
-    df = pd.read_csv("data/sources.csv")
-    df2 = pd.read_csv("result_temp_2.csv")
+    df = pd.read_csv("./data/updated_sources.csv")
 
     grouped_urls = df.groupby("statement_id")["urls"].apply(list)
     if not os.path.exists("result_temp.csv"):
@@ -20,13 +19,13 @@ def testing():
 
     for statement_id, urls in grouped_urls.items():
 
-        if statement_id in df2.index:
-            print("Already processed")
-            continue
+        # if statement_id in df2.index:
+        #     print("Already processed")
+        #     continue
 
-        for url in urls:
-            if "https://www.icao.int/environmental-protection" in url:
-                urls.remove(url)
+        # for url in urls:
+        #     if "https://www.icao.int/environmental-protection" in url:
+        #         urls.remove(url)
 
         # fetch statement claim from statement table
         claim = dbh.fetch_single_statement(statement_id)
@@ -41,27 +40,35 @@ def testing():
                 article_id=9999,
                 claim=claim,
                 num_of_web_sources=len(urls),
-                provided_urls=urls,
+                provided_urls=None,
             )
-
+            retrieved_knowledge = None
+            justification = None
             llm = None
             label = None
+            urls = None
 
             for key, value in llm_instance.items():
-                print(f"{key}: {value}")
                 if key == "label":
                     label = value
-                    print(label)
                 if key == "model":
                     llm = value
-                    print(llm)
+                if key == "external_sources":
+                    retrieved_knowledge = value
+                if key == "justification":
+                    justification = value
+                if key == "sources":
+                    urls = value
 
             result = {
                 "statement_id": statement_id,
                 "claim": claim,
                 "urls": urls,
                 "label": label,
+                "true_label": dbh.fetch_ground_truth_label(statement_id),
                 "llm": llm,
+                "retrieved_knowledge": retrieved_knowledge,
+                "justification": justification,
             }
         except Exception as e:
             print(e)
@@ -70,7 +77,10 @@ def testing():
                 "claim": claim,
                 "urls": urls,
                 "label": None,
+                "true_label": dbh.fetch_ground_truth_label(statement_id),
                 "llm": None,
+                "retrieved_knowledge": None,
+                "justification": e,
             }
 
         print(result)
@@ -80,6 +90,6 @@ def testing():
         )
 
     results_df = pd.DataFrame(results_list)
-    results_df = results_df.to_csv("results.csv", index=False)
+    results_df = results_df.to_csv("./data/results_supervised_0_1.csv", index=False)
     print("Finished!")
     return results_df

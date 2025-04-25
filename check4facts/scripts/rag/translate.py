@@ -67,14 +67,14 @@ def translate(text, src_lang, target_lang):
 # ad hoc translation for the label only, to match check4facts format
 def translate_label(text):
     text = text.strip()
-    if "relatively accurate" in text.lower():
-        return 3
-    elif "relatively inaccurate" in text.lower():
+    if "relatively inaccurate" in text.lower():
         return 2
-    elif "accurate" in text.lower():
-        return 4
+    elif "relatively accurate" in text.lower():
+        return 3
     elif "inaccurate" in text.lower():
         return 1
+    elif "accurate" in text.lower():
+        return 4
     elif "unverifiable" in text.lower():
         return 0
     else:
