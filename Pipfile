@@ -45,11 +45,14 @@ stanza = "*"
 tiktoken = "*"
 pyjwt = "*"
 fastapi = "*"
-uvicorn = "*"
 python-dotenv = "*"
 python-multipart = "*"
 starlette = "*"
 asyncio = "*"
+crawl4ai = "*"
+markdown = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+langdetect = "*"
 
 [requires]
 python_version = "3.10"

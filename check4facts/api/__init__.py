@@ -306,6 +306,19 @@ async def test_get_rag_batch_endpoint(current_user: dict = Depends(get_current_u
     task = run_batch_rag.apply_async(kwargs={})
     return{"taskId": task.id, "status": task.status, "taskInfo": task.info}
 
+@app.post("/new-rag-test")
+async def new_rag_test_endpoint(
+    json: dict, current_user: dict = Depends(get_current_user)
+):
+    claim = json["text"]
+    n = json["n"]
+    article_id = json["article_id"]
+    print(f"article_id: {article_id}, claim: {claim}, n: {n}")  # Debugging
+    task = new_rag_run.apply_async(
+        kwargs={"article_id": article_id, "claim": claim, "n": n}
+    )
+    return {"task_id": task.id, "status": task.status}
+
 @app.post("/start-dummy-task")
 async def start_dummy_task_endpoint(current_user: dict = Depends(get_current_user)):
     task = dummy_task.apply_async(kwargs={})
