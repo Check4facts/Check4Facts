@@ -229,7 +229,7 @@ class Harvester:
                 continue
 
             similarity_p, result_p = self.similarity_text(self.claim, body)
-            sim_sentences = self.get_relevant_sentences(self.claim, body, threshold=0.1)
+            sim_sentences = self.get_relevant_sentences(self.claim, body, threshold=0.3)
 
             data = {
                 "id": len(df),
