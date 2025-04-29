@@ -45,6 +45,8 @@ connections = {}
 async def lifespan(app: FastAPI):
     dbh.connect()
     log.info("Lifespan: Database connected")
+    
+    await dbh.start_listening_once()
 
     # 🧠 Ensure task_messages table exists only once at startup
     try:

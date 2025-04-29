@@ -61,6 +61,7 @@ class DBHandler:
         self.conn_params = kwargs
         self.listen_callbacks = {}
         self.loop = asyncio.get_event_loop()
+        self._listen_loop_started = False 
 
     def connect(self):
         try:
@@ -109,6 +110,15 @@ class DBHandler:
         self.cursor.execute(f"LISTEN {channel};")
         self.listen_callbacks[channel] = callback
         self.loop.create_task(self._listen_loop())
+
+    async def start_listening_once(self):
+        """Start listen loop only once"""
+        if not self._listen_loop_started:
+            self._listen_loop_started = True
+            log.debug("Starting PostgreSQL listen loop once.")
+            self.loop.create_task(self._listen_loop())
+        else:
+            log.debug("Listen loop already started, skipping.")
         
     def unlisten(self, channel: str):
         log.debug(f"Unlistening from channel {channel}")
