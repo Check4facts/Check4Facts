@@ -51,7 +51,7 @@ class groq_api:
 
         while retries < max_retries:
 
-            # try to create an api call with the first llm
+            #try to create an api call with the first llm     
             try:
                 start_time = time.time()
 
@@ -70,10 +70,8 @@ class groq_api:
                     
                 break
 
-            # if it fails to produce a result, try with the second llm
+            #if it fails to produce a result, try with the second llm
             except Exception as e:
-                print(f"Error: {e}")
-                print('Failed to produce a result, try with the second llm')
                 try:
                      start_time = time.time()
                      time.sleep(5)

@@ -1,9 +1,15 @@
+import json
+import select
+import asyncio
 import numpy as np
 import psycopg2
-from psycopg2.extensions import register_adapter, AsIs
-import pickle
+from psycopg2.extensions import register_adapter, AsIs, ISOLATION_LEVEL_AUTOCOMMIT
+from bs4 import BeautifulSoup
+from check4facts.logging import get_logger
 
 from check4facts.scripts.text_sum.text_process import extract_text_from_html
+
+log = get_logger()
 
 
 # Functions to adapt NumPy types
@@ -37,35 +43,93 @@ def add_numpy_adapters():
 # Register the adapters
 add_numpy_adapters()
 
+def task_channel_name(task_id: str) -> str:
+    return f"task_channel_{task_id.replace('-', '_')}"
+
+def extract_task_id_from_channel(channel: str) -> str:
+    prefix = "task_channel_"
+    if channel.startswith(prefix):
+        suffix = channel[len(prefix):]
+        return suffix.replace("_", "-")
+    raise ValueError(f"Invalid channel name: {channel}")
+
 
 class DBHandler:
 
     def __init__(self, **kwargs):
         self.connection, self.cursor = None, None
         self.conn_params = kwargs
+        self.listen_callbacks = {}
+        self.loop = asyncio.get_event_loop()
 
     def connect(self):
         try:
 
             self.connection = psycopg2.connect(**self.conn_params)
+            self.connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
             self.cursor = self.connection.cursor()
 
             self.cursor.execute("SELECT version();")
 
             db_version = self.cursor.fetchone()
-            print(f"Connected to: {db_version}")
+            log.info(f"Connected to: {db_version}")
 
         except Exception as e:
-            print(f"Error: {e}")
+            log.error(f"Error: {e}")
 
     def disconnect(self):
         if self.connection:
             self.cursor.close()
             self.connection.close()
-            print("Connection closed.")
+            log.info("Connection closed.")
         else:
-            print("Unable to close connection. Is the connection already closed?")
+            log.warning("Unable to close connection. Is the connection already closed?")
+
+    def notify(self, channel, payload: str):
+        if not self.connection or self.connection.closed:
+            self.connect()
+
+        self.cursor.execute(f"NOTIFY {channel}, %s;", (payload,))
+        log.debug(f"Sending notification to channel {channel}: {payload}")
+
+        try:
+            task_id = extract_task_id_from_channel(channel)
+            self.cursor.execute(
+                "INSERT INTO task_messages (task_id, payload) VALUES (%s, %s);",
+                (task_id, json.dumps(payload))
+            )
+            log.debug(f"Saved task message for {task_id}")
+        except Exception as e:
+            log.error(f"Could not insert task message: {e}")
+
+    def listen(self, channel: str, callback):
+        """Registers a callback and starts listening to a task_id"""
+        log.debug(f"Listening to channel {channel}")
+        self.cursor.execute(f"LISTEN {channel};")
+        self.listen_callbacks[channel] = callback
+        self.loop.create_task(self._listen_loop())
+        
+    def unlisten(self, channel: str):
+        log.debug(f"Unlistening from channel {channel}")
+        self.cursor.execute(f"UNLISTEN {channel};")
+        self.listen_callbacks.pop(channel, None)
+
+    async def _listen_loop(self):
+        log.debug("Starting LISTEN loop...")
+        while True:
+            if select.select([self.connection], [], [], 1) == ([], [], []):
+                await asyncio.sleep(0.1)
+                continue
+
+            self.connection.poll()
+            while self.connection.notifies:
+                notify = self.connection.notifies.pop(0)
+                log.debug(f"Received raw notification: {notify.payload}")
+                channel = notify.channel
+                payload = notify.payload
+                if channel in self.listen_callbacks:
+                    await self.listen_callbacks[channel](json.loads(payload))
 
     def fetch_active_tasks_ids(self):
         if not self.connection:
@@ -85,7 +149,7 @@ class DBHandler:
                 response.append(row[0])
 
         except Exception as e:
-            print(f"Error fetching active celery tasks: {e}")
+            log.error(f"Error fetching active celery tasks: {e}")
             self.connection.rollback()
             return []
 
@@ -118,7 +182,7 @@ class DBHandler:
             conn.commit()
             cur.close()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
@@ -312,7 +376,7 @@ class DBHandler:
             conn.commit()
             cur.close()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
@@ -327,7 +391,7 @@ class DBHandler:
             res = cur.fetchall()
             conn.commit()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
@@ -343,7 +407,7 @@ class DBHandler:
             res = [r[0] for r in cur.fetchall()]
             conn.commit()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
@@ -360,7 +424,7 @@ class DBHandler:
             conn.commit()
             cur.close()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
@@ -379,11 +443,31 @@ class DBHandler:
             conn.commit()
             cur.close()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            log.error(error)
         finally:
             if conn is not None:
                 conn.close()
             return res
+
+    def fetch_single_statement(self, statement_id):
+        if not self.connection:
+            self.connect()
+
+        try:
+            print(f"Fetching statement with id: {statement_id}")
+            sql = f"""
+                SELECT s.text
+                FROM statement s
+                WHERE s.id = {statement_id}
+            """
+            self.cursor.execute(sql)
+            result = self.cursor.fetchone()[0]
+            print(f"Statement text: {result}")
+            return result
+
+        except Exception as e:
+            print(f"Error fetching text from statement: {e}")
+            self.connection.rollback()
 
     def fetch_article_content(self, article_id):
         if not self.connection or self.connection.closed:
@@ -400,9 +484,9 @@ class DBHandler:
             return result
 
         except Exception as e:
-            print(f"Error fetching content from article: {e}")
+            log.error(f"Error fetching content from article: {e}")
             self.connection.rollback()
-            
+
     def fetch_articles_without_summary(self):
         if not self.connection or self.connection.closed:
             self.connect()
@@ -415,13 +499,129 @@ class DBHandler:
             """
             self.cursor.execute(sql)
             results = self.cursor.fetchall()
-            results = list(map(lambda item: (item[0], extract_text_from_html(item[1])), results))
+            results = list(
+                map(lambda item: (item[0], extract_text_from_html(item[1])), results)
+            )
             return results
 
         except Exception as e:
-            print(f"Error fetching articles without summary: {e}")
+            log.error(f"Error fetching articles without summary: {e}")
             self.connection.rollback()
             return []
+
+    def fetch_sources_from_articles_content(self, page_size=50):
+        # Method to fetch sources from articles content mapped by statement_id
+        if not self.connection or self.connection.closed:
+            self.connect()
+
+        last_id = 0
+
+        fact_checker_sources = {}
+        try:
+            while True:
+                query = f"""
+                    SELECT statement_id, content
+                    FROM article
+                    WHERE statement_id > {last_id}
+                    ORDER BY statement_id
+                    LIMIT {page_size};
+                """
+                self.cursor.execute(query)
+                results = self.cursor.fetchall()
+
+                if not results:
+                    break
+                last_id = int(results[-1][0])
+                for index, row in enumerate(results):
+                    statement_id = row[0]
+                    content = row[1]
+
+                    fact_checker_sources[statement_id] = []
+
+                    soup = BeautifulSoup(content, "html.parser")
+                    sources_element = soup.find(
+                        lambda tag: tag.name and "Πηγές" in tag.get_text()
+                    )
+                    if sources_element:
+                        elements_after_sources = sources_element.find_all_next()
+                        for elem in elements_after_sources:
+                            if elem.name == "a":
+                                fact_checker_sources[statement_id].append(elem["href"])
+
+            # filter out empty lists
+            fact_checker_sources = {k: v for k, v in fact_checker_sources.items() if v}
+            return fact_checker_sources
+        except Exception as e:
+            log.error(f"Error fetching page of articles contents: {e}")
+            self.connection.rollback()
+            return {}
+
+    def fetch_statement_text(self, statement_id):
+        if not self.connection or self.connection.closed:
+            self.connect()
+
+        try:
+            log.debug(f"Fetching text from stament with id: {statement_id}")
+            sql = f"""
+                SELECT s.text
+                FROM statement s
+                WHERE s.id = {statement_id}
+            """
+            self.cursor.execute(sql)
+            result = self.cursor.fetchone()[0]
+            log.debug(f"Statement text: {result}")
+            return result
+
+        except Exception as e:
+            log.error(f"Error fetching text from statement: {e}")
+            self.connection.rollback()
+
+    def fetch_all_statement_texts(self):
+        if not self.connection or self.connection.closed:
+            self.connect()
+
+        try:
+            log.debug(f"Fetching all texts from statement table...")
+            sql = """
+                SELECT s.id, s.text
+                FROM statement s
+                WHERE s.fact_checker_accuracy IS NOT NULL;
+            """
+            self.cursor.execute(sql)
+            result = self.cursor.fetchall()
+            result = [list((item[0], item[1])) for item in result]
+            log.debug(f"Fetched {len(result)} statement texts from database!")
+            return result
+
+        except Exception as e:
+            log.error(f"Error fetching text from statement: {e}")
+            self.connection.rollback()
+
+    def insert_justification(
+        self, statement_id, text, timestamp, elapsed_time, label, model, sources
+    ):
+        if not self.connection or self.connection.closed:
+            self.connect()
+
+        try:
+            log.info(
+                f"Inserting new justification with text: {text} for stament with id: {statement_id}"
+            )
+            sql = """
+                INSERT INTO justification (statement_id, text, timestamp, elapsed_time, label, model, sources)
+                VALUES (%s, %s, %s, %s, %s, %s, %s);
+            """
+            self.cursor.execute(
+                sql,
+                (statement_id, text, timestamp, elapsed_time, label, model, sources),
+            )
+            self.connection.commit()
+            log.info(
+                f"Justification for statement id: {statement_id} inserted successfully."
+            )
+        except Exception as e:
+            log.error(f"Error inserting justification for statement_id {statement_id}: {e}")
+            self.connection.rollback()
 
     # added extra functions for text summarization handling
 
@@ -438,21 +638,21 @@ class DBHandler:
             )
             row = self.cursor.fetchone()
             if row and row[0]:
-                print(
+                log.debug(
                     "Summary already exists in the for this article_id. Deleting previous registrations..."
                 )
                 self.remove_summary_by_article_id(article_id)
 
-            print("Inserting summary....")
+            log.debug("Inserting summary....")
             query = """
             UPDATE article SET summary = %s WHERE id = %s;
             """
             self.cursor.execute(query, (article_summary, article_id))
             self.connection.commit()
-            print(f"Summary with article id: {article_id} inserted successfully.")
+            log.info(f"Summary with article id: {article_id} inserted successfully.")
 
         except Exception as e:
-            print(f"Error inserting summary: {e}")
+            log.error(f"Error inserting summary: {e}")
             self.connection.rollback()
 
     def remove_summary_by_article_id(self, article_id):
@@ -473,12 +673,46 @@ class DBHandler:
             """
                 self.cursor.execute(query, (article_id,))
                 self.connection.commit()
-                print(f"Summary with article id: {article_id} deleted successfully.")
+                log.debug(f"Summary with article id: {article_id} deleted successfully.")
             else:
-                print(
+                log.warning(
                     f"Cannot delete summary for article id: {article_id}. Summary doesn't exist"
                 )
                 self.connection.rollback()
         except Exception as e:
-            print(f"Error deleting row: {e}")
+            log.error(f"Error deleting row: {e}")
             self.connection.rollback()
+
+    def fetch_blacklist(self):
+        if not self.connection or self.connection.closed:
+            self.connect()
+        try:
+            self.cursor.execute(
+                """SELECT url FROM justification_source WHERE black_listed is TRUE""",
+            )
+            result = self.cursor.fetchall()
+            return [row[0] for row in result]
+
+        except Exception as e:
+            print(f"Error retrieving result: {e}")
+            self.connection.rollback()
+            return []
+
+    def fetch_whitelist(self):
+        pass
+
+    def fetch_ground_truth_label(self, statement_id):
+        if not self.connection or self.connection.closed:
+            self.connect()
+        try:
+            self.cursor.execute(
+                """SELECT fact_checker_accuracy FROM statement WHERE id = %s""",
+                (statement_id,),
+            )
+            result = self.cursor.fetchone()[0]
+
+            return int(result)
+        except Exception as e:
+            print(f"Error retrieving result: {e}")
+            self.connection.rollback()
+            return None
