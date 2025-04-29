@@ -60,7 +60,11 @@ class DBHandler:
         self.connection, self.cursor = None, None
         self.conn_params = kwargs
         self.listen_callbacks = {}
-        self.loop = asyncio.get_event_loop()
+        try:
+            self.loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
         self._listen_loop_started = False 
 
     def connect(self):
@@ -106,10 +110,12 @@ class DBHandler:
 
     def listen(self, channel: str, callback):
         """Registers a callback and starts listening to a task_id"""
+        if not self.connection or self.connection.closed:
+            self.connect()
         log.debug(f"Listening to channel {channel}")
         self.cursor.execute(f"LISTEN {channel};")
         self.listen_callbacks[channel] = callback
-        self.loop.create_task(self._listen_loop())
+        self.loop.create_task(self.start_listening_once())
 
     async def start_listening_once(self):
         """Start listen loop only once"""
@@ -126,20 +132,33 @@ class DBHandler:
         self.listen_callbacks.pop(channel, None)
 
     async def _listen_loop(self):
-        log.debug("Starting LISTEN loop...")
+        log.info("Starting listen loop (polling PostgreSQL for notifications)...")
         while True:
-            if select.select([self.connection], [], [], 1) == ([], [], []):
-                await asyncio.sleep(0.1)
-                continue
+            try:
+                if self.connection is None or self.connection.closed:
+                    log.warning("Database connection closed. Reconnecting...")
+                    self.connect()
 
-            self.connection.poll()
-            while self.connection.notifies:
-                notify = self.connection.notifies.pop(0)
-                log.debug(f"Received raw notification: {notify.payload}")
-                channel = notify.channel
-                payload = notify.payload
-                if channel in self.listen_callbacks:
-                    await self.listen_callbacks[channel](json.loads(payload))
+                # Wait for activity on the connection for up to 5 seconds
+                rlist, _, _ = select.select([self.connection], [], [], 5)
+                if rlist:
+                    self.connection.poll()
+                    while self.connection.notifies:
+                        notify = self.connection.notifies.pop(0)
+                        channel = notify.channel
+                        payload = notify.payload
+                        callback = self.listen_callbacks.get(channel)
+                        if callback:
+                            if asyncio.iscoroutinefunction(callback):
+                                await callback(payload)
+                            else:
+                                callback(payload)
+                        else:
+                            log.warning(f"No callback found for channel: {channel}")
+                await asyncio.sleep(0.1)  # prevent tight loop when no activity
+            except Exception as e:
+                log.error(f"Error in listen loop: {e}")
+                await asyncio.sleep(1)  # prevent crash loop on exception
 
     def fetch_active_tasks_ids(self):
         if not self.connection:
