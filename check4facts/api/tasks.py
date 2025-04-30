@@ -12,6 +12,7 @@ from check4facts.scripts.search import SearchEngine
 from check4facts.scripts.features import FeaturesExtractor
 from check4facts.database import task_channel_name
 from check4facts.logging import get_logger
+from check4facts.api.redis_pubsub import publish_progress
 
 # imports for text summarization
 from check4facts.scripts.text_sum.local_llm import invoke_local_llm, google_llm
@@ -43,7 +44,8 @@ def analyze_task(self, statement):
         "status": "PROGRESS",
         "type": "analyze",
     }
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    
+    publish_progress(self.request.id, json.dumps(progress))
 
     statement_id = statement.get("id")
     statement_text = statement.get("text")
@@ -59,7 +61,8 @@ def analyze_task(self, statement):
     statements = [statement_text]
 
     progress["progress"] = 20
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    
+    publish_progress(self.request.id, json.dumps(progress))
     # Using first element only for the result cause only one statement is being checked.
     search_results = se.run(statements)[0]
 
@@ -72,7 +75,8 @@ def analyze_task(self, statement):
     ]
 
     progress["progress"] = 40
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    
+    publish_progress(self.request.id, json.dumps(progress))
     # Using first element only for the result cause only one statement is being checked.
     harvest_results = h.run(articles)[0]
 
@@ -91,7 +95,8 @@ def analyze_task(self, statement):
     ]
 
     progress["progress"] = 60
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    
+    publish_progress(self.request.id, json.dumps(progress))
     features_results = fe.run(statement_dicts)[0]
 
     if harvest_results.empty:
@@ -103,7 +108,7 @@ def analyze_task(self, statement):
         p = Predictor(**predict_params)
 
         progress["progress"] = 80
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
         predict_result = p.run([features_results]).loc[0, ["pred_0", "pred_1"]].values
 
     resource_records = harvest_results.to_dict("records")
@@ -118,7 +123,8 @@ def analyze_task(self, statement):
 
     progress["progress"] = 100
     progress["status"] = "SUCCESS"
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    
+    publish_progress(self.request.id, json.dumps(progress))
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -130,7 +136,8 @@ def train_task(self):
         "status": "PROGRESS",
         "type": "train",
     }
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    
+    publish_progress(self.request.id, json.dumps(progress))
     
     path = os.path.join(DirConf.CONFIG_DIR, "train_config.yml")
     with open(path, "r") as f:
@@ -138,7 +145,8 @@ def train_task(self):
     t = Trainer(**train_params)
     
     progress["progress"] = 33
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    
+    publish_progress(self.request.id, json.dumps(progress))
 
     features_records = dbh.fetch_statement_features(train_params["features"])
     features = np.vstack([np.hstack(f) for f in features_records])
@@ -146,7 +154,8 @@ def train_task(self):
     t.run(features, labels)
     
     progress["progress"] = 66
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    
+    publish_progress(self.request.id, json.dumps(progress))
 
     if not os.path.exists(DirConf.MODELS_DIR):
         os.mkdir(DirConf.MODELS_DIR)
@@ -156,7 +165,8 @@ def train_task(self):
     
     progress["progress"] = 100
     progress["status"] = "SUCCESS"
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    
+    publish_progress(self.request.id, json.dumps(progress))
 
 
 @shared_task(bind=True, ignore_result=False)
@@ -168,7 +178,7 @@ def intial_train_task(self):
         "status": "PROGRESS",
         "type": "train",
     }
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    publish_progress(self.request.id, json.dumps(progress))
 
     # Initialize all python modules.
     path = os.path.join(DirConf.CONFIG_DIR, "search_config.yml")  # when using uwsgi.
@@ -197,7 +207,7 @@ def intial_train_task(self):
         counter += 1
         
         progress["progress"] = counter / total_count * 100
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
 
         print(f"Starting search for {statement_id}")
 
@@ -241,7 +251,7 @@ def intial_train_task(self):
     print(f"Successfully saved the best model.")
         
     progress["status"] = "SUCCESS"
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    publish_progress(self.request.id, json.dumps(progress))
 
 
 # Tasks for text summarization
@@ -258,23 +268,23 @@ def summarize_text(self, article_id):
             "status": "PROGRESS",
             "type": "summarize",
         }
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
         content = dbh.fetch_article_content(article_id)
 
         progress["progress"] = 20
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
 
         # Keep only the actual text from the article's content
         content = extract_text_from_html(content)
         progress["progress"] = 40
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
 
         # invoke Gemini llm
         log.debug("Trying to invoke gemini llm....")
         answer = google_llm(article_id, content)
         
         progress["progress"] = 60
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
         if answer:
             result = {
                 "summarization": answer["summarization"],
@@ -307,17 +317,17 @@ def summarize_text(self, article_id):
         )
         
         progress["progress"] = 80
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
 
         dbh.insert_summary(article_id, result["summarization"])
         progress["progress"] = 100
         progress["status"] = "SUCCESS"
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
         
         dbh.disconnect()
     except Exception as e:
         progress["status"] = "FAILURE"
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
         log.error(f"Error generating summary for article with id {article_id}: {e}")
 
 
@@ -388,20 +398,20 @@ def justify_task(self, statement_id, n):
         "status": "PROGRESS",
         "type": "justify",
     }
-    dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+    publish_progress(self.request.id, json.dumps(progress))
 
     text = dbh.fetch_statement_text(statement_id)
     try:
 
         progress["progress"] = 40
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
         # answer = run_pipeline(statement_id, text, n, None)
         crawler = crawl4ai(claim=text, web_sources=n, article_id=statement_id)
         answer = crawler.run_crawler()
         if answer:
             
             progress["progress"] = 80
-            dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+            publish_progress(self.request.id, json.dumps(progress))
             log.debug("FINAL ANSWER: ")
             for key, value in answer.items():
                 log.debug(f"{key}: {value}")
@@ -419,13 +429,13 @@ def justify_task(self, statement_id, n):
             
             progress["progress"] = 100
             progress["status"] = "SUCCESS"
-            dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+            publish_progress(self.request.id, json.dumps(progress))
         else:
             raise Exception("Pipeline returned empty result")
 
     except Exception as e:
         progress["status"] = "FAILURE"
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
         log.error(f"Error during rag run: {e}")
 
     return
@@ -562,9 +572,9 @@ def dummy_task(self):
     from check4facts.api import dbh
     for i in range(5):
         progress = {"taskId": self.request.id, "progress": i * 20, "status": "PROGRESS"}
-        dbh.notify(task_channel_name(self.request.id), json.dumps(progress))
+        publish_progress(self.request.id, json.dumps(progress))
         time.sleep(10)
 
     # ✅ Final notify with status=SUCCESS
     final = {"taskId": self.request.id, "progress": 100, "status": "SUCCESS"}
-    dbh.notify(task_channel_name(self.request.id), json.dumps(final))
+    publish_progress(self.request.id, json.dumps(final))

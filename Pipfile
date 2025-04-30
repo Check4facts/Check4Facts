@@ -20,7 +20,6 @@ sqlalchemy = "*"
 psycopg2-binary = "*"
 joblib = "*"
 snowballstemmer = "*"
-celery = "*"
 matplotlib = "*"
 morfessor = "*"
 lxml = "*"
@@ -54,6 +53,8 @@ markdown = "*"
 uvicorn = {extras = ["standard"], version = "*"}
 langdetect = "*"
 gunicorn = "*"
+redis = "*"
+celery = {extras = ["redis"], version = "*"}
 
 [requires]
 python_version = "3.10"

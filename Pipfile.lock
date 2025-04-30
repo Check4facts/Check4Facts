@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "e15d511cb783f302ec1d23df73222b6b82c245738066b67fac3b37299c0d634c"
+            "sha256": "ec3bdaee08266b37c9954159d2a34daba5765ab1e7eae29da0a4b35f343c6dfb"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -392,11 +392,13 @@
             "version": "==2.0.10"
         },
         "celery": {
+            "extras": [
+                "redis"
+            ],
             "hashes": [
                 "sha256:4d6930f354f9d29295425d7a37261245c74a32807c45d764bedc286afd0e724e",
                 "sha256:54425a067afdc88b57cd8d94ed4af2ffaf13ab8c7680041ac2c4ac44357bdf4c"
             ],
-            "index": "pypi",
             "markers": "python_version >= '3.8'",
             "version": "==5.5.2"
         },
@@ -3332,6 +3334,15 @@
                 "sha256:7bd4a95571adadfc271746fa146a4bcfd89c0cf731e49c3d1ad863290adbe8ae"
             ],
             "version": "==0.2.2"
+        },
+        "redis": {
+            "hashes": [
+                "sha256:16f2e22dff21d5125e8481515e386711a34cbec50f0e44413dd7d9c060a54e0f",
+                "sha256:ee7e1056b9aea0f04c6c2ed59452947f34c4940ee025f5dd83e6a6418b6989e4"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.8'",
+            "version": "==5.2.1"
         },
         "referencing": {
             "hashes": [

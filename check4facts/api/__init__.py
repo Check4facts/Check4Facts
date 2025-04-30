@@ -1,7 +1,9 @@
+import asyncio
 from collections import defaultdict
 from contextlib import asynccontextmanager
 import os
 import jwt
+import json
 import time
 import yaml
 import base64
@@ -13,6 +15,8 @@ from check4facts.logging import get_logger
 from check4facts.database import DBHandler, task_channel_name
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from check4facts.api.redis_pubsub import get_redis
+from redis.asyncio import Redis
 from fastapi import (
     FastAPI,
     Request,
@@ -45,22 +49,6 @@ connections = {}
 async def lifespan(app: FastAPI):
     dbh.connect()
     log.info("Lifespan: Database connected")
-    
-    await dbh.start_listening_once()
-
-    # 🧠 Ensure task_messages table exists only once at startup
-    try:
-        dbh.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS task_messages (
-                id SERIAL PRIMARY KEY,
-                task_id UUID NOT NULL,
-                payload JSONB NOT NULL,
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-        """)
-        log.info("Ensured task_messages table exists at startup.")
-    except Exception as e:
-        log.error(f"Error creating task_messages table: {e}")
     yield
     dbh.disconnect()
 
@@ -110,7 +98,7 @@ def validate_jwt(token):
 def celery_init_app(app: FastAPI) -> Celery:
     celery_app = Celery(app.title)
     celery_app.conf.broker_connection_retry_on_startup = True
-    celery_app.conf.broker_url = os.getenv("CELERY_BROKER_URL")
+    celery_app.conf.broker_url = os.getenv("CELERY_REDIS_URL")
     celery_app.conf.result_backend = os.getenv("CELERY_RESULT_BACKEND")
     return celery_app
 
@@ -326,50 +314,63 @@ async def start_dummy_task_endpoint(current_user: dict = Depends(get_current_use
     task = dummy_task.apply_async(kwargs={})
     return {"taskId": task.id, "status": task.status, "taskInfo": task.info}
 
+redis = Redis.from_url(os.getenv("CELERY_REDIS_URL"), decode_responses=True)
+
+
 @app.websocket("/ws/{task_id}")
 async def websocket_endpoint(websocket: WebSocket, task_id: str):
-
-    async def handle_notify(payload):
-        # If there's an active WebSocket, send it
+    async def send_message(payload):
         if task_id in connections:
             ws = connections[task_id]
             await ws.send_json(payload)
-                
 
     try:
-        # Validate JWT during connection establishment
+        # Validate JWT
         token = websocket.query_params.get("token")
         user = await get_current_user_from_ws(token)
         log.info(f"User connected: {user['sub']}")
-        
+
         try:
             await websocket.accept()
             connections[task_id] = websocket
-            
-            # Fetch missed messages from the DB
-            dbh.cursor.execute(
-                "SELECT payload FROM task_messages WHERE task_id = %s ORDER BY created_at",
-                (task_id,)
-            )
-            rows = dbh.cursor.fetchall()
-            for row in rows:
-                log.debug(f"Flushing stored message for {task_id}: {row[0]}")
-                await websocket.send_json(row[0])
-            
-            dbh.listen(task_channel_name(task_id), handle_notify)
 
-            # Keep connection alive (optional receive)
+            # Flush existing messages (from Redis key-value store)
+            history = await redis.get(f"progress:{task_id}")
+            if history:
+                log.debug(f"Flushing stored progress for {task_id}: {history}")
+                # await websocket.send_json({"progress": json.loads(history)})
+                await websocket.send_json(history)
+
+            # Redis Pub/Sub setup
+            pubsub = redis.pubsub()
+            await pubsub.subscribe(task_channel_name(task_id))
+            log.info(f"Subscribed to Redis channel: {task_channel_name(task_id)}")
+
+            # Listen loop
             while True:
-                await websocket.receive_text()
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                if message:
+                    data = message["data"]
+                    log.debug(f"Received Redis pubsub message: {data}")
+                    await send_message(data)
+                
+                # Optional: keep connection alive
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=0.5)
+                except asyncio.TimeoutError:
+                    pass
+
         except WebSocketDisconnect as exc:
             if exc.code == 1000:
                 log.info(f"WebSocket closed gracefully: {task_id}")
             else:
                 log.error(f"WebSocket disconnected unexpectedly: {task_id} : {exc}")
         finally:
-            dbh.unlisten(task_channel_name(task_id))
+            await pubsub.unsubscribe(f"progress_channel:{task_id}")
+            await pubsub.close()
             connections.pop(task_id, None)
+            log.info(f"Cleaned up WebSocket and Redis PubSub for {task_id}")
+
     except HTTPException as exc:
-        # The connection will not be accepted if token is invalid/expired
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         log.error(f"Connection closed due to authentication error: {exc.detail}")

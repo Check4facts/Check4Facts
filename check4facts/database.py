@@ -59,13 +59,6 @@ class DBHandler:
     def __init__(self, **kwargs):
         self.connection, self.cursor = None, None
         self.conn_params = kwargs
-        self.listen_callbacks = {}
-        try:
-            self.loop = asyncio.get_running_loop()
-        except RuntimeError:
-            self.loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.loop)
-        self._listen_loop_started = False 
 
     def connect(self):
         try:
@@ -90,75 +83,6 @@ class DBHandler:
             log.info("Connection closed.")
         else:
             log.warning("Unable to close connection. Is the connection already closed?")
-
-    def notify(self, channel, payload: str):
-        if not self.connection or self.connection.closed:
-            self.connect()
-
-        self.cursor.execute(f"NOTIFY {channel}, %s;", (payload,))
-        log.debug(f"Sending notification to channel {channel}: {payload}")
-
-        try:
-            task_id = extract_task_id_from_channel(channel)
-            self.cursor.execute(
-                "INSERT INTO task_messages (task_id, payload) VALUES (%s, %s);",
-                (task_id, json.dumps(payload))
-            )
-            log.debug(f"Saved task message for {task_id}")
-        except Exception as e:
-            log.error(f"Could not insert task message: {e}")
-
-    def listen(self, channel: str, callback):
-        """Registers a callback and starts listening to a task_id"""
-        if not self.connection or self.connection.closed:
-            self.connect()
-        log.debug(f"Listening to channel {channel}")
-        self.cursor.execute(f"LISTEN {channel};")
-        self.listen_callbacks[channel] = callback
-        self.loop.create_task(self.start_listening_once())
-
-    async def start_listening_once(self):
-        """Start listen loop only once"""
-        if not self._listen_loop_started:
-            self._listen_loop_started = True
-            log.debug("Starting PostgreSQL listen loop once.")
-            self.loop.create_task(self._listen_loop())
-        else:
-            log.debug("Listen loop already started, skipping.")
-        
-    def unlisten(self, channel: str):
-        log.debug(f"Unlistening from channel {channel}")
-        self.cursor.execute(f"UNLISTEN {channel};")
-        self.listen_callbacks.pop(channel, None)
-
-    async def _listen_loop(self):
-        log.info("Starting listen loop (polling PostgreSQL for notifications)...")
-        while True:
-            try:
-                if self.connection is None or self.connection.closed:
-                    log.warning("Database connection closed. Reconnecting...")
-                    self.connect()
-
-                # Wait for activity on the connection for up to 5 seconds
-                rlist, _, _ = select.select([self.connection], [], [], 5)
-                if rlist:
-                    self.connection.poll()
-                    while self.connection.notifies:
-                        notify = self.connection.notifies.pop(0)
-                        channel = notify.channel
-                        payload = notify.payload
-                        callback = self.listen_callbacks.get(channel)
-                        if callback:
-                            if asyncio.iscoroutinefunction(callback):
-                                await callback(payload)
-                            else:
-                                callback(payload)
-                        else:
-                            log.warning(f"No callback found for channel: {channel}")
-                await asyncio.sleep(0.1)  # prevent tight loop when no activity
-            except Exception as e:
-                log.error(f"Error in listen loop: {e}")
-                await asyncio.sleep(1)  # prevent crash loop on exception
 
     def fetch_active_tasks_ids(self):
         if not self.connection:
