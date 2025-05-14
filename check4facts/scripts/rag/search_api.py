@@ -5,18 +5,14 @@ import re
 import os
 import psycopg2
 import pandas as pd
+import json
 
-
-# sites_source = [
-#     "ellinikahoaxes.gr",
-#     "factcheckgreek.afp.com",
-#     "check4facts.gr",
-#     "factcheckcyprus.org",
-#     "www.youtube.com",
-#     "www.linkedin.com",
-#     "m.facebook.com",
-# ]
 # doc_extensions = ["doc", "docx", "php", "pdf", "txt", "theFile", "file", "xls"]
+
+# with open("data/whitelist.json", "r") as f:
+#     whitelist = json.load(f)
+
+
 doc_extensions = []
 pattern = r"[./=]([a-zA-Z0-9]+)$"
 
@@ -36,7 +32,7 @@ def filter_urls(url_list):
     black_urls = blacklist_urls()
     filtered_urls = []
     for url in url_list:
-        url_domain = urlparse(url).netloc
+        url_domain = str(urlparse(url).netloc).replace("www.", "")
         match = re.search(pattern, url[-6:])
         if match:
             file_extension = match.group(1)
@@ -45,9 +41,11 @@ def filter_urls(url_list):
         if (
             file_extension not in doc_extensions
             and url_domain not in black_urls
+            # and url_domain in whitelist
             and not "/document/" in url
         ):
             filtered_urls.append(url)
+
     return filtered_urls
 
 
@@ -78,11 +76,11 @@ def google_search(query, web_sources):
         urls = filter_urls(urls)
         if urls == []:
             print("Initializing backup search....")
-            return google_search_backup(query, web_sources)
+            return filter_urls(google_search_backup(query, web_sources))
         else:
             return urls
 
     except Exception as e:
         print(e)
         print("Initializing backup search....")
-        return google_search_backup(query, web_sources)
+        return filter_urls(google_search_backup(query, web_sources))

@@ -493,6 +493,53 @@ class DBHandler:
             self.connection.rollback()
             return {}
 
+    def fetch_sources_from_articles_content_category_wise(self, id, page_size=50):
+        # Method to fetch sources from articles content mapped by statement_id
+        if not self.connection or self.connection.closed:
+            self.connect()
+
+        last_id = 0
+
+        fact_checker_sources = {}
+        try:
+            while True:
+                query = f"""
+                    SELECT statement_id, content
+                    FROM article
+                    WHERE statement_id > {last_id} AND category_id = {id}
+                    ORDER BY statement_id
+                    LIMIT {page_size};
+                """
+                self.cursor.execute(query)
+                results = self.cursor.fetchall()
+
+                if not results:
+                    break
+                last_id = int(results[-1][0])
+                for index, row in enumerate(results):
+                    statement_id = row[0]
+                    content = row[1]
+
+                    fact_checker_sources[statement_id] = []
+
+                    soup = BeautifulSoup(content, "html.parser")
+                    sources_element = soup.find(
+                        lambda tag: tag.name and "Πηγές" in tag.get_text()
+                    )
+                    if sources_element:
+                        elements_after_sources = sources_element.find_all_next()
+                        for elem in elements_after_sources:
+                            if elem.name == "a":
+                                fact_checker_sources[statement_id].append(elem["href"])
+
+            # filter out empty lists
+            fact_checker_sources = {k: v for k, v in fact_checker_sources.items() if v}
+            return fact_checker_sources
+        except Exception as e:
+            print(f"Error fetching page of articles contents: {e}")
+            self.connection.rollback()
+            return {}
+
     def fetch_statement_text(self, statement_id):
         if not self.connection or self.connection.closed:
             self.connect()
@@ -653,3 +700,24 @@ class DBHandler:
             print(f"Error retrieving result: {e}")
             self.connection.rollback()
             return None
+
+    def fetch_statements_urls(self):
+        from urllib.parse import urlparse
+
+        if not self.connection or self.connection.closed:
+            self.connect()
+
+        try:
+            sql = """
+                SELECT url
+                FROM statement_source;
+            """
+            self.cursor.execute(sql)
+            results = self.cursor.fetchall()
+            domains = {urlparse(row[0]).netloc for row in results if row[0]}
+            return sorted(domains)
+
+        except Exception as e:
+            print(f"Error fetching articles without summary: {e}")
+            self.connection.rollback()
+            return []

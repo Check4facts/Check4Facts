@@ -208,6 +208,15 @@ def create_app() -> Flask:
             202,
         )
 
+    # for debugging only
+    @app.route("/whitelist", methods=["GET"])
+    def get_whitelist():
+        task = run_batch_rag_new.apply_async(kwargs={})
+        return (
+            jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
+            202,
+        )
+
     @app.route("/rag-test", methods=["POST"])
     def get_rag():
 
@@ -229,6 +238,15 @@ def create_app() -> Flask:
     def get_rag_2():
 
         task = run_batch_rag.apply_async(kwargs={})
+        return (
+            jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
+            202,
+        )
+
+    @app.route("/rag-batch-new", methods=["GET"])
+    def get_rag_3():
+
+        task = run_batch_rag_new.apply_async(kwargs={})
         return (
             jsonify({"taskId": task.id, "status": task.status, "taskInfo": task.info}),
             202,

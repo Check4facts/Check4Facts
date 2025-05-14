@@ -18,15 +18,22 @@ nltk.download("punkt")
 
 
 class crawl4ai:
-    def __init__(self, claim, web_sources, article_id):
+    def __init__(self, claim, web_sources, article_id, provided_urls):
         self.claim = claim
         self.web_sources = web_sources
         self.article_id = article_id
         self.model = SentenceTransformer("distiluse-base-multilingual-cased-v2")
+        self.provided_urls = provided_urls
 
     def get_urls(self):
-        self.urls = google_search(self.claim, self.web_sources)
-        return self.urls
+        # if no urls were provided
+        if not self.provided_urls:
+            print("No urls provided. Searching the web for urls....")
+            self.urls = google_search(self.claim, self.web_sources)
+            return self.urls
+        else:
+            self.urls = self.provided_urls
+            return self.urls
 
     def chunk_text(self, text, chunk_size=500, overlap_size=50):
         sentences = nltk.sent_tokenize(text)
@@ -48,7 +55,7 @@ class crawl4ai:
     def get_sim_text(
         self,
         text,
-        threshold=0.3,
+        threshold=0.6,
         chunk_size=500,
     ):
         if not text:
@@ -107,9 +114,11 @@ class crawl4ai:
     async def get_external_knowledge(self):
         urls = self.get_urls()
         run_conf = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=True)
-
         async with AsyncWebCrawler() as crawler:
+
+            print(f"URLS to be harvested {urls}")
             async for result in await crawler.arun_many(urls, config=run_conf):
+
                 if result.success:
                     print(
                         f"[OK] {result.url}, length: {len(result.markdown.raw_markdown)}"
@@ -135,6 +144,7 @@ class crawl4ai:
             final_info = ""
             for text in similar_texts:
                 final_info += "\n".join(text) + "\n\n"
+
         return final_info, urls
 
     def run_crawler(self):
