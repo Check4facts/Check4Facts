@@ -23,8 +23,7 @@ Guidelines:
   - Greek authorities
   - International authorities
   - Scientific journals or organizations that could help with the claim's domain
-  -
-- Do NOT include blogs, news media, or journalist-run portals.
+- Do NOT include Greek blogs, news media, or journalist-run portals. Renowned global news agencies are ok.
 - Include queries in Greek **and** English if relevant.
 - Use the `site:` operator to restrict search results to specific domains.
 - Make each query highly specific to help locate information that confirms or denies the claim.
@@ -134,7 +133,7 @@ Top 10 Google Search Queries:
 
         # result = self.google_llm()
         result = self.run_groq()
-        # print(f"LLM result is: {result}")
-        urls = re.findall(r"\*+\s+(.*?)\s*$", result, re.MULTILINE)
-        print(urls)
-        return urls
+        print(f"LLM result is: {result}")
+        queries = re.findall(r"\*+\s+(.*?)\s*$", result, re.MULTILINE)
+        print(queries)
+        return queries

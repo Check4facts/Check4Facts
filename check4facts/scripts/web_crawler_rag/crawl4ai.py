@@ -12,7 +12,17 @@ from check4facts.scripts.rag.groq_api import *
 from check4facts.scripts.rag.gemini_llm import *
 from check4facts.scripts.rag.ollama_llm import *
 from check4facts.scripts.rag.mistral_llm import mistral_llm
-from check4facts.scripts.rag.search_api import google_search
+from check4facts.scripts.rag.search_api import google_search, search_queries
+from check4facts.scripts.web_crawler_rag.search_engine import SearchEngine
+from check4facts.scripts.web_crawler_rag.url_generation import url_generation
+import aiohttp
+import requests
+import os
+import hashlib
+from datetime import datetime
+import pymupdf4llm
+import langdetect
+
 
 nltk.download("punkt")
 
@@ -22,15 +32,30 @@ class crawl4ai:
         self.claim = claim
         self.web_sources = web_sources
         self.article_id = article_id
-        self.model = SentenceTransformer("distiluse-base-multilingual-cased-v2")
+        # self.model = SentenceTransformer("distiluse-base-multilingual-cased-v2")
+        self.model = SentenceTransformer("sentence-transformers/LaBSE")
         self.provided_urls = provided_urls
+        self.search_engine = SearchEngine(2)
 
     def get_urls(self):
         # if no urls were provided
         if not self.provided_urls:
-            print("No urls provided. Searching the web for urls....")
-            self.urls = google_search(self.claim, self.web_sources)
+            # traditional blacklist searching api
+            # print("No urls provided. Searching the web for urls....")
+            # self.urls = google_search(self.claim, self.web_sources)
+            # return self.urls
+            # search api with llm assisted domain query generation
+            generator = url_generation(self.claim)
+            queries = generator.generate_queries()
+            # calling the api
+            # self.urls = search_queries(queries)
+            # calling the self hosted search engine
+            self.urls = self.search_engine.call_engine(queries)
+            for url in self.urls:
+                print(url)
+                print("=========================================================")
             return self.urls
+
         else:
             self.urls = self.provided_urls
             return self.urls
@@ -43,19 +68,27 @@ class crawl4ai:
             if len(current_chunk) + len(sentence) <= chunk_size:
                 current_chunk += " " + sentence if current_chunk else sentence
             else:
+                # print(current_chunk)
+                # print("-----------------------------------")
                 chunks.append(current_chunk)
                 current_chunk = sentence[:overlap_size]
                 current_chunk += sentence[overlap_size:]
 
         if current_chunk:
+            # print(current_chunk)
+            # print("-----------------------------------")
             chunks.append(current_chunk)
 
         return chunks
 
+    def get_dynamic_threshold(chunk_text):
+        lang = langdetect.detect(chunk_text)
+        return 0.4 if lang == "el" else 0.3
+
     def get_sim_text(
         self,
         text,
-        threshold=0.6,
+        min_threshold=0.35,
         chunk_size=500,
     ):
         if not text:
@@ -65,11 +98,20 @@ class crawl4ai:
         chunks = self.chunk_text(text, chunk_size)
         if not chunks:
             return []
+        print("LEN OF CHUNKS OF THE FILE IS: ")
+        print(len(chunks))
         chunk_embeddings = self.model.encode(chunks, convert_to_tensor=True)
         chunk_similarities = util.cos_sim(claim_embedding, chunk_embeddings)
         for chunk, similarity in zip(chunks, chunk_similarities[0]):
-            if similarity >= threshold:
+            if similarity >= min_threshold:
+                print(chunk)
+                print()
+                print(similarity)
+                print("--------------------------------------------------")
                 filtered_results.append(chunk)
+        print(f"NUMBER OF FILTERED CHUNKS IS: {len(filtered_results)}")
+        if len(filtered_results) == 0:
+            return []
         return filtered_results
 
     def single_text_embedding(self, text):
@@ -111,41 +153,131 @@ class crawl4ai:
             print(f"Running local llm failed: {e}")
             return None
 
+    def harvest_pdf(self, pdf_url):
+        # create a file name from its hashed url and save it temporarily to read it
+        os.makedirs("data", exist_ok=True)
+        url_hash = hashlib.md5(pdf_url.encode()).hexdigest()
+        filename = f"{url_hash}.pdf"
+        save_path = os.path.join("data", filename)
+
+        response = requests.get(pdf_url)
+        if response.status_code == 200:
+            try:
+                with open(save_path, "wb") as f:
+                    f.write(response.content)
+                print(f"PDF downloaded successfully to: {'./data'}")
+
+                # extract text from pdf
+                md_text = pymupdf4llm.to_markdown(save_path)
+                result = self.convert_markdown_to_text(md_text)
+                return result
+
+            # delete the file after the processing is done
+            finally:
+                if os.path.exists(save_path):
+                    os.remove(save_path)
+                    print(f"Deleted downloaded file: {save_path}")
+        else:
+            print(f"Failed to download PDF. Status code: {response.status_code}")
+
     async def get_external_knowledge(self):
         urls = self.get_urls()
-        run_conf = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=True)
+        # store the urls that actually provided us with information
+        content_urls = []
+        final_info = ""
+        # for debugging
+        # urls = [
+        #     "https://www.hellenicparliament.gr/UserFiles/8c3e9046-78fb-48f4-bd82-bbba28ca1ef5/vouli_en_low_28_1_09.pdf"
+        # ]
+        # urls = [
+        #     "https://www.hellenicparliament.gr/UserFiles/8c3e9046-78fb-48f4-bd82-bbba28ca1ef5/vouli_site_version.pdf"
+        # ]
+        html_urls = []
+        pdf_urls = []
+
+        # async with aiohttp.ClientSession() as session:
+        for url in urls:
+            if url.lower().endswith(".pdf"):
+                pdf_urls.append(url)
+            else:
+                # extra block of code for checking for pdf files (unnecessary for now)
+                # try:
+                #     async with session.head(
+                #         url, allow_redirects=True, timeout=5
+                #     ) as resp:
+                #         content_type = resp.headers.get("Content-Type", "").lower()
+                #         if "pdf" in content_type:
+                #             pdf_urls.append(url)
+                #         else:
+                #             html_urls.append(url)
+                # except Exception as e:
+                #     print(f"[HEAD ERROR] {url} => {e}")
+                html_urls.append(url)  # fallback
+
+        # run_conf = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=True)
+        # async with AsyncWebCrawler() as crawler:
+
+        #     # parsing the non-pdf urls
+        #     print(f"URLS to be harvested {html_urls}")
+        #     async for result in await crawler.arun_many(html_urls, config=run_conf):
+
+        #         if result.success:
+        #             print(
+        #                 f"[OK] {result.url}, length: {len(result.markdown.raw_markdown)}"
+        #             )
+        #         else:
+        #             print(f"[ERROR] {result.url} => {result.error_message}")
+
+        #     run_conf = run_conf.clone(stream=False)
+        #     results = await crawler.arun_many(html_urls, config=run_conf)
+        #     similar_texts = []
+        #     for res in results:
+        #         if res.success:
+
+        #             print(f"[OK] {res.url}, length: {len(res.markdown.raw_markdown)}")
+        #             similar_chunks = self.get_sim_text(
+        #                 self.convert_markdown_to_text(res.markdown.raw_markdown),
+        #             )
+        #             if similar_chunks:
+        #                 content_urls.append(res.url)
+        #             similar_texts.append(similar_chunks)
+        #         else:
+        #             print(f"[ERROR] {res.url} => {res.error_message}")
+        run_conf = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=False)
         async with AsyncWebCrawler() as crawler:
-
-            print(f"URLS to be harvested {urls}")
-            async for result in await crawler.arun_many(urls, config=run_conf):
-
-                if result.success:
-                    print(
-                        f"[OK] {result.url}, length: {len(result.markdown.raw_markdown)}"
-                    )
-                else:
-                    print(f"[ERROR] {result.url} => {result.error_message}")
-
-            run_conf = run_conf.clone(stream=False)
-            results = await crawler.arun_many(urls, config=run_conf)
+            results = await crawler.arun_many(html_urls, config=run_conf)
             similar_texts = []
+
             for res in results:
                 if res.success:
-
                     print(f"[OK] {res.url}, length: {len(res.markdown.raw_markdown)}")
                     similar_chunks = self.get_sim_text(
                         self.convert_markdown_to_text(res.markdown.raw_markdown),
                     )
+
+                    if similar_chunks != []:
+                        content_urls.append(res.url)
+
                     similar_texts.append(similar_chunks)
                 else:
                     print(f"[ERROR] {res.url} => {res.error_message}")
 
-            print("Similar texts:")
-            final_info = ""
+            # parsing the pdf files
+            # for pdf in pdf_urls:
+            # pdf_text = self.harvest_pdf(pdf)
+            # similar_chunks = self.get_sim_text(
+            #     pdf_text,
+            # )
+            # if similar_chunks:
+            #         content_urls.append(pdf)
+
+            # similar_texts.append(similar_chunks)
+
+            # aggregating everything
             for text in similar_texts:
                 final_info += "\n".join(text) + "\n\n"
 
-        return final_info, urls
+        return final_info, content_urls
 
     def run_crawler(self):
         start_time = time.time()
@@ -161,7 +293,7 @@ class crawl4ai:
         print(
             "----------------------------EXTERNAL SOURCES HARVESTED----------------------------"
         )
-        print(external_sources)
+        # print(external_sources)
         print(
             "----------------------------------------------------------------------------------"
         )
