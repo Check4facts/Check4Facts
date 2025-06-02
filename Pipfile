@@ -37,7 +37,7 @@ langchain-text-splitters = "*"
 langchain = "*"
 google-generativeai = "*"
 googletrans = "*"
-duckduckgo-search = "==6.3.5"
+duckduckgo-search = "*"
 ollama = "*"
 sentence-transformers = "*"
 stanza = "*"
@@ -55,6 +55,8 @@ langdetect = "*"
 gunicorn = "*"
 redis = "*"
 celery = {extras = ["redis"], version = "*"}
+langchain-community = "*"
+pymupdf4llm = "*"
 
 [requires]
 python_version = "3.10"
