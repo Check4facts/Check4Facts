@@ -18,27 +18,39 @@ You are an expert fact-checker. Your task is to help verify the following claim 
 Claim:
 {claim}
 
+
+
 Guidelines:
-- Focus on official and trustworthy sources only:
-  - Greek authorities
-  - International authorities
-  - Scientific journals or organizations that could help with the claim's domain
-- Do NOT include Greek blogs, news media, or journalist-run portals. Renowned global news agencies are ok.
-- Include queries in Greek **and** English if relevant.
-- Use the `site:` operator to restrict search results to specific domains.
-- Make each query highly specific to help locate information that confirms or denies the claim.
-- Start with the most relevant query.
-- Change the URLs provided depending on the claim's domain. For example, 
-  if the claim is enviroment related, search for environmental organizations, if the claim is migrations related, 
-  check about migration organizations and authorities etc.
-- Focus on **fresh and recent information**, ideally published in **the last 1–2 years**. You can encourage this by:
-  - Including the year (e.g., `2025`) in the query
-  - Adding terms like `recent`, `new`
-- Make each query highly specific to help locate information that confirms or denies the claim.
-Do not make any commentary, do not provide explanations. Just provide the queries in the format below:
+- Focus on **official, trustworthy, and domain-relevant sources only**. Choose sources depending on the topic of the claim.
+- Avoid Greek blogs, news media, or journalist-run portals. Renowned global news agencies (e.g., Reuters, Associated Press) are acceptable.
+- Include queries in **Greek and English**, if applicable.
+- Use the `site:` operator to restrict search results to trustworthy domains.
+- Make each query **highly specific** to the claim to locate information that confirms or denies it.
+
+
+Dynamically adapt the sources based on the **claim’s domain**:
+
+Some examples of domain-specific sources. Feel free to add more based on the claim's context, but avoid greek jounalistic sites or blogs:    
+
+- **Health**: WHO, CDC, EMA, EODY, scientific journals (e.g., site:nature.com, site:thelancet.com)
+- **Environment**: UNEP, IPCC, WWF, Greenpeace, site:ypen.gr
+- **Migration**: UNHCR, IOM, Greek Ministry of Migration, Eurostat
+- **Economy**: IMF, World Bank, ELSTAT (site:statistics.gr), OECD
+- **Technology**: GSMA, IEEE, Gartner, IDC, ITU, Statista
+- **Climate**: IPCC, WMO, NOAA, Copernicus, meteo.gr
+- **Education**: Greek Ministry of Education, UNESCO, Eurydice, OECD
+- **Agriculture**: FAO, Greek Ministry of Agriculture, Eurostat
+- **Energy**: IEA, RAE.gr, ADMIE.gr, DEDDIE.gr, EU Energy
+
+Instructions:
+1. Identify the most relevant sources based on the claim’s domain.
+2. Construct 10 focused Google search queries using both Greek and English where needed.
+3. Use `site:` filters for official domains wherever possible.
+4. Include the year (e.g., `2025`) or words like "recent", "latest", "updated", etc., to emphasize recency.
+5. Do NOT include irrelevant government sites for global or unrelated topics.
 
 Output Format:
-Top 10 Google Search Queries:
+Best 10 Google Search Queries WIHTOUT ANY ADDITIONAL TEXT OR COMMENTARY:
 * ...
 * ...
 ...
