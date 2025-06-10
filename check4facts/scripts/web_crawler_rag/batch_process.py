@@ -8,139 +8,90 @@ from check4facts.scripts.web_crawler_rag.url_generation import url_generation
 def testing_new():
     from check4facts.api import dbh
     import os
+    import time
+    import numpy as np
+    import pandas as pd
+    import re
     from urllib.parse import urlparse
 
-    # whitelist = dbh.fetch_statements_urls()
-    # print(whitelist)
+    ids_to_process = [
+        40,
+        53,
+        72,
+        79,
+        93,
+        99,
+        112,
+        128,
+        129,
+        132,
+        154,
+        155,
+        157,
+        158,
+        160,
+        163,
+        169,
+        170,
+        173,
+        175,
+        176,
+        178,
+        223,
+        247,
+        248,
+        250,
+    ]
 
-    # whitelist_pandemic = dbh.fetch_sources_from_articles_content_category_wise(id=1005)
-    # whitelist_crime = dbh.fetch_sources_from_articles_content_category_wise(id=3)
-    # whitelist_climate = dbh.fetch_sources_from_articles_content_category_wise(id=1004)
-    # whitelist_immigration = dbh.fetch_sources_from_articles_content_category_wise(id=2)
-    # whitelist_digital_transition = (
-    #     dbh.fetch_sources_from_articles_content_category_wise(id=1013)
-    # )
+    results_path = "data/rag_results.csv"
 
-    # pandemic_domains = list(
-    #     {urlparse(url).netloc for urls in whitelist_pandemic.values() for url in urls}
-    # )
-    # crime_domains = list(
-    #     {urlparse(url).netloc for urls in whitelist_crime.values() for url in urls}
-    # )
-    # climate_domains = list(
-    #     {urlparse(url).netloc for urls in whitelist_climate.values() for url in urls}
-    # )
-    # immigration_domains = list(
-    #     {
-    #         urlparse(url).netloc
-    #         for urls in whitelist_immigration.values()
-    #         for url in urls
-    #     }
-    # )
-    # digital_transition_domains = list(
-    #     {
-    #         urlparse(url).netloc
-    #         for urls in whitelist_digital_transition.values()
-    #         for url in urls
-    #     }
-    # )
+    # Load already processed IDs if file exists
+    if os.path.exists(results_path):
+        existing_df = pd.read_csv(results_path)
+        processed_ids = set(existing_df["id"])
+        results = existing_df.to_dict(orient="records")
+    else:
+        processed_ids = set()
+        results = []
 
-    claim = "Ο Βελόπουλος ισχυρίστηκε ότι τα ΜΜΕ δεν καλύπτουν τους κινδύνους της Τεχνητής Νοημοσύνης."
+    statements = dbh.fetch_all_statement_texts()
 
-    domains = url_generation(claim=claim)
-    domains.return_whitelist()
-    # print("Pandemic: ")
-    # print(pandemic_domains)
-    # print()
-    # print("Crime: ")
-    # print(crime_domains)
-    # print()
-    # print("Climate: ")
-    # print(climate_domains)
-    # print()
-    # print("Immigration: ")
-    # print(immigration_domains)
-    # print()
+    for id, statement in statements:
+        if int(id) not in ids_to_process:
+            continue
+        if id in processed_ids:
+            continue  # Skip already processed claims
 
-    # index = 0
-    # results_list = []
-    # df = pd.read_csv("./data/updated_sources.csv")
+        print(f"Processing ID: {id}")
+        print(statement)
+        print("----")
 
-    # grouped_urls = df.groupby("statement_id")["urls"].apply(list)
-    # if not os.path.exists("result_temp.csv"):
-    #     pd.DataFrame(columns=["statement_id", "claim", "urls", "result"]).to_csv(
-    #         "result_temp.csv", index=False
-    #     )
+        try:
+            crawler = crawl4ai(
+                claim=statement, web_sources=1, article_id=id, provided_urls=None
+            )
+            answer = crawler.run_crawler()
 
-    # for statement_id, urls in grouped_urls.items():
+            if answer:
+                print("FINAL ANSWER:")
+                print()
+                for key, value in answer.items():
+                    print(f"{key}: {value}")
 
-    #     claim = dbh.fetch_single_statement(statement_id)
-    #     print(
-    #         f"""
-    #         statement_id: {statement_id},
-    #         claim: {claim},
-    #         urls: {urls}"""
-    #     )
+                answer["id"] = id
+                answer["claim"] = statement
 
-    #     try:
-    #         crawler = crawl4ai(claim, len(urls), article_id=9999, provided_urls=urls)
-    #         llm_instance = crawler.run_crawler()
+                results.append(answer)
 
-    #         # llm_instance = run_crawler(
-    #         #     article_id=9999,
-    #         #     claim=claim,
-    #         #     num_of_web_sources=len(urls),
-    #         #     provided_urls=urls,
-    #         # )
-    #         retrieved_knowledge = None
-    #         justification = None
-    #         llm = None
-    #         label = None
-    #         urls = None
+                # Save after each result
+                df = pd.DataFrame(results)
+                df.to_csv(results_path, index=False)
+                print(f"Progress saved to {results_path}")
 
-    #         for key, value in llm_instance.items():
-    #             if key == "label":
-    #                 label = value
-    #             if key == "model":
-    #                 llm = value
-    #             if key == "external_sources":
-    #                 retrieved_knowledge = value
-    #             if key == "justification":
-    #                 justification = value
-    #             if key == "sources":
-    #                 urls = value
+            else:
+                raise Exception("Pipeline returned empty result")
 
-    #         result = {
-    #             "statement_id": statement_id,
-    #             "claim": claim,
-    #             "urls": urls,
-    #             "label": label,
-    #             "true_label": dbh.fetch_ground_truth_label(statement_id),
-    #             "llm": llm,
-    #             "retrieved_knowledge": retrieved_knowledge,
-    #             "justification": justification,
-    #         }
-    #     except Exception as e:
-    #         print(f"Error during new rag batch process {e}")
-    #         result = {
-    #             "statement_id": statement_id,
-    #             "claim": claim,
-    #             "urls": urls,
-    #             "label": None,
-    #             "true_label": dbh.fetch_ground_truth_label(statement_id),
-    #             "llm": None,
-    #             "retrieved_knowledge": None,
-    #             "justification": e,
-    #         }
-    #         break
+        except Exception as e:
+            print(f"Error during new rag run for ID {id}: {e}")
 
-    #     print(result)
-    #     results_list.append(result)
-    #     pd.DataFrame([result]).to_csv(
-    #         "result_temp.csv", mode="a", header=False, index=False
-    #     )
-
-    # results_df = pd.DataFrame(results_list)
-    # results_df = results_df.to_csv("./data/new_results_supervised_0_6.csv", index=False)
-    # print("Finished!")
-    # return results_df
+    print("Finished processing.")

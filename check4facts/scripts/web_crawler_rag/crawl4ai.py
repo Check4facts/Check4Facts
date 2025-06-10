@@ -54,11 +54,11 @@ class crawl4ai:
             for url in self.urls:
                 print(url)
                 print("=========================================================")
-            return self.urls
+            return self.urls, queries
 
         else:
             self.urls = self.provided_urls
-            return self.urls
+            return self.urls, ""
 
     def chunk_text(self, text, chunk_size=500, overlap_size=50):
         sentences = nltk.sent_tokenize(text)
@@ -88,7 +88,7 @@ class crawl4ai:
     def get_sim_text(
         self,
         text,
-        min_threshold=0.35,
+        min_threshold=0.2,
         chunk_size=500,
     ):
         if not text:
@@ -133,8 +133,12 @@ class crawl4ai:
         return response
 
     def run_gemini(self, info, article_id):
-        gemini_instance = gemini_llm(query=self.claim, external_knowledge=info)
-        answer = gemini_instance.google_llm(article_id)
+        try:
+            gemini_instance = gemini_llm(query=self.claim, external_knowledge=info)
+            answer = gemini_instance.google_llm(article_id)
+        except Exception as e:
+            print(f"Running gemini llm failed: {e}")
+            answer = None
         return answer
 
     def run_mistral(self, info, article_id):
@@ -181,7 +185,7 @@ class crawl4ai:
             print(f"Failed to download PDF. Status code: {response.status_code}")
 
     async def get_external_knowledge(self):
-        urls = self.get_urls()
+        urls, queries = self.get_urls()
         # store the urls that actually provided us with information
         content_urls = []
         final_info = ""
@@ -277,7 +281,7 @@ class crawl4ai:
             for text in similar_texts:
                 final_info += "\n".join(text) + "\n\n"
 
-        return final_info, content_urls
+        return final_info, content_urls, queries
 
     def run_crawler(self):
         start_time = time.time()
@@ -287,16 +291,16 @@ class crawl4ai:
             )
             return None
 
-        external_sources, urls = asyncio.run(self.get_external_knowledge())
+        external_sources, urls, queries = asyncio.run(self.get_external_knowledge())
 
         # for debugging purposes
-        print(
-            "----------------------------EXTERNAL SOURCES HARVESTED----------------------------"
-        )
+        # print(
+        #     "----------------------------EXTERNAL SOURCES HARVESTED----------------------------"
+        # )
         # print(external_sources)
-        print(
-            "----------------------------------------------------------------------------------"
-        )
+        # print(
+        #     "----------------------------------------------------------------------------------"
+        # )
         extraction_time = np.round(
             (time.time() - start_time),
         )
@@ -329,6 +333,7 @@ class crawl4ai:
                 "%Y-%m-%d %H:%M:%S%z", time.localtime()
             )
             gemini_response["model"] = "Gemini"
+            gemini_response["queries"] = queries
             return gemini_response
 
         # if the connections fails to be established or the response is empty, invoke the groq api.
@@ -359,6 +364,7 @@ class crawl4ai:
                 "%Y-%m-%d %H:%M:%S%z", time.localtime()
             )
             groq_response["model"] = "GROQ"
+            groq_response["queries"] = queries
             return groq_response
 
         # #if the connection fails again, invoke the mistral llm
@@ -391,6 +397,7 @@ class crawl4ai:
                 "%Y-%m-%d %H:%M:%S%z", time.localtime()
             )
             mistral_response["model"] = "Mistral"
+            mistral_response["queries"] = queries
             return mistral_response
 
         # if the connections fails to be established or the response is empty, invoke the local LLM.
@@ -422,6 +429,7 @@ class crawl4ai:
                 "%Y-%m-%d %H:%M:%S%z", time.localtime()
             )
             ollama_response["model"] = "Ollama"
+            ollama_response["queries"] = queries
             return ollama_response
 
         return {"error": "All llm invokation attempts failed"}

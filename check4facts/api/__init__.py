@@ -209,7 +209,7 @@ def create_app() -> Flask:
         )
 
     # for debugging only
-    @app.route("/whitelist", methods=["GET"])
+    @app.route("/batch_new", methods=["GET"])
     def get_whitelist():
         task = run_batch_rag_new.apply_async(kwargs={})
         return (
