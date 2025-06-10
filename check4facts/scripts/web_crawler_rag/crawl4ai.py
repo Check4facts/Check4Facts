@@ -8,6 +8,7 @@ import nltk
 import time
 import numpy as np
 import re
+from check4facts.api.redis_pubsub import publish_progress
 from check4facts.scripts.rag.groq_api import *
 from check4facts.scripts.rag.gemini_llm import *
 from check4facts.scripts.rag.ollama_llm import *
@@ -22,13 +23,14 @@ import hashlib
 from datetime import datetime
 import pymupdf4llm
 import langdetect
+from json import dumps
 
 
 nltk.download("punkt")
 
 
 class crawl4ai:
-    def __init__(self, claim, web_sources, article_id, provided_urls):
+    def __init__(self, claim, web_sources, article_id, provided_urls, task_id:str = None, progress:dict[str, any] = None):
         self.claim = claim
         self.web_sources = web_sources
         self.article_id = article_id
@@ -36,6 +38,8 @@ class crawl4ai:
         self.model = SentenceTransformer("sentence-transformers/LaBSE")
         self.provided_urls = provided_urls
         self.search_engine = SearchEngine(2)
+        self.task_id = task_id
+        self.progress = progress
 
     def get_urls(self):
         # if no urls were provided
@@ -247,12 +251,18 @@ class crawl4ai:
         #             similar_texts.append(similar_chunks)
         #         else:
         #             print(f"[ERROR] {res.url} => {res.error_message}")
+                
+        if (self.task_id and self.progress):
+            self.progress["progress"] = 20
+            publish_progress(self.task_id, dumps(self.progress))
         run_conf = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=False)
         async with AsyncWebCrawler() as crawler:
             results = await crawler.arun_many(html_urls, config=run_conf)
             similar_texts = []
 
-            for res in results:
+            # Progress update: from 20% to 60% over all results
+            total = len(results)
+            for idx, res in enumerate(results):
                 if res.success:
                     print(f"[OK] {res.url}, length: {len(res.markdown.raw_markdown)}")
                     similar_chunks = self.get_sim_text(
@@ -265,6 +275,12 @@ class crawl4ai:
                     similar_texts.append(similar_chunks)
                 else:
                     print(f"[ERROR] {res.url} => {res.error_message}")
+
+                # Update progress after each result
+                if self.task_id and self.progress and total > 0:
+                    # Linear interpolation from 20 to 60
+                    self.progress["progress"] = 20 + ((idx + 1) / total) * 40
+                    publish_progress(self.task_id, dumps(self.progress))
 
             # parsing the pdf files
             # for pdf in pdf_urls:
@@ -280,6 +296,10 @@ class crawl4ai:
             # aggregating everything
             for text in similar_texts:
                 final_info += "\n".join(text) + "\n\n"
+                
+        if (self.task_id and self.progress):
+            self.progress["progress"] = 60
+            publish_progress(self.task_id, dumps(self.progress))
 
         return final_info, content_urls, queries
 
@@ -307,6 +327,9 @@ class crawl4ai:
 
         # Invoke the gemini llm
         start_time = time.time()
+        if (self.task_id and self.progress):
+            self.progress["progress"] = 70
+            publish_progress(self.task_id, dumps(self.progress))
         gemini_response = self.run_gemini(external_sources, self.article_id)
         if gemini_response:
             label_match = re.search(

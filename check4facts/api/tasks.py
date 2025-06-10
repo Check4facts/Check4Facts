@@ -404,10 +404,10 @@ def justify_task(self, statement_id, n):
     text = dbh.fetch_statement_text(statement_id)
     try:
 
-        progress["progress"] = 40
+        progress["progress"] = 10
         publish_progress(self.request.id, json.dumps(progress))
         # answer = run_pipeline(statement_id, text, n, None)
-        crawler = crawl4ai(claim=text, web_sources=n, article_id=statement_id)
+        crawler = crawl4ai(claim=text, web_sources=n, article_id=statement_id, provided_urls=None, task_id=self.request.id, progress=progress)
         answer = crawler.run_crawler()
         if answer:
             
