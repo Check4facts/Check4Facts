@@ -14,36 +14,8 @@ def testing_new():
     import re
     from urllib.parse import urlparse
 
-    ids_to_process = [
-        40,
-        53,
-        72,
-        79,
-        93,
-        99,
-        112,
-        128,
-        129,
-        132,
-        154,
-        155,
-        157,
-        158,
-        160,
-        163,
-        169,
-        170,
-        173,
-        175,
-        176,
-        178,
-        223,
-        247,
-        248,
-        250,
-    ]
-
-    results_path = "data/rag_results.csv"
+    blacklisted_ids = [129]
+    results_path = "data/rag_results_final.csv"
 
     # Load already processed IDs if file exists
     if os.path.exists(results_path):
@@ -57,10 +29,12 @@ def testing_new():
     statements = dbh.fetch_all_statement_texts()
 
     for id, statement in statements:
-        if int(id) not in ids_to_process:
-            continue
         if id in processed_ids:
+            print(f"ID:{id} is already processed. Skipping....")
             continue  # Skip already processed claims
+        if id in blacklisted_ids:
+            print(f"ID:{id} is blacklisted. Skipping....")
+            continue
 
         print(f"Processing ID: {id}")
         print(statement)
