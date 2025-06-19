@@ -38,6 +38,7 @@ class gemini_llm:
     """
 
         self.prompt_with_rag = f"""
+    You are a greek fact-checker.
     You have at your disposal information '[Information]' that was found on the web, and a statement: '[User Input]' whose accuracy must be evaluated. 
     Use only the provided information from the web in combination with your knowledge to decide whether the statement is is ACCURATE, INACCURATE, RELATIVELY ACCURATE, or RELATIVELY INACCURATE.
 

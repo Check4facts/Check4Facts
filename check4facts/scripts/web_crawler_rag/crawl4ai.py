@@ -97,14 +97,18 @@ class crawl4ai:
     ):
         if not text:
             return []
-        claim_embedding = self.model.encode(self.claim, convert_to_tensor=True)
+        claim_embedding = self.model.encode(
+            self.claim, convert_to_tensor=True, show_progress_bar=False
+        )
         filtered_results = []
         chunks = self.chunk_text(text, chunk_size)
         if not chunks:
             return []
-        print("LEN OF CHUNKS OF THE FILE IS: ")
-        print(len(chunks))
-        chunk_embeddings = self.model.encode(chunks, convert_to_tensor=True)
+        # print("LEN OF CHUNKS OF THE FILE IS: ")
+        # print(len(chunks))
+        chunk_embeddings = self.model.encode(
+            chunks, convert_to_tensor=True, show_progress_bar=False
+        )
         chunk_similarities = util.cos_sim(claim_embedding, chunk_embeddings)
         for chunk, similarity in zip(chunks, chunk_similarities[0]):
             if similarity >= min_threshold:
@@ -113,13 +117,15 @@ class crawl4ai:
                 print(similarity)
                 print("--------------------------------------------------")
                 filtered_results.append(chunk)
-        print(f"NUMBER OF FILTERED CHUNKS IS: {len(filtered_results)}")
+        # print(f"NUMBER OF FILTERED CHUNKS IS: {len(filtered_results)}")
         if len(filtered_results) == 0:
             return []
         return filtered_results
 
     def single_text_embedding(self, text):
-        embedding = self.model.encode(text, convert_to_tensor=True)
+        embedding = self.model.encode(
+            text, convert_to_tensor=True, show_progress_bar=False
+        )
         torch.cuda.empty_cache()
         return embedding
 
