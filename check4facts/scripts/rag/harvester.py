@@ -59,8 +59,9 @@ class Harvester:
         b = pd.DataFrame(body_sentences)
 
         # Compute embeddings
-        claim_emb = self.model.encode(claim)
-        body_sen_emb = self.model.encode(body_sentences)
+
+        claim_emb = self.model.encode(claim, show_progress_bar=False)
+        body_sen_emb = self.model.encode(body_sentences, show_progress_bar=False)
 
         # Compute cosine similarities
         cosine_scores = util.cos_sim(claim_emb, body_sen_emb)
@@ -229,7 +230,7 @@ class Harvester:
                 continue
 
             similarity_p, result_p = self.similarity_text(self.claim, body)
-            sim_sentences = self.get_relevant_sentences(self.claim, body, threshold=0.3)
+            sim_sentences = self.get_relevant_sentences(self.claim, body, threshold=0.4)
 
             data = {
                 "id": len(df),
