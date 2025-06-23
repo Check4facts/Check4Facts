@@ -29,6 +29,7 @@ def testing_new():
     statements = dbh.fetch_all_statement_texts()
 
     for id, statement in statements:
+        time.sleep(10)
         if id in processed_ids:
             print(f"ID:{id} is already processed. Skipping....")
             continue  # Skip already processed claims
@@ -54,6 +55,7 @@ def testing_new():
 
                 answer["id"] = id
                 answer["claim"] = statement
+                answer["ground_truth"] = dbh.fetch_ground_truth_label(id)
 
                 results.append(answer)
 
