@@ -263,8 +263,8 @@ class crawl4ai:
 
                 # Update progress after each result
                 if self.task_id and self.progress and total > 0:
-                    # Linear interpolation from 20 to 60
-                    self.progress["progress"] = 20 + ((idx) / total) * 40
+                    # Linear interpolation from 20 to 80
+                    self.progress["progress"] = 20 + ((idx) / total) * 60
                     publish_progress(self.task_id, dumps(self.progress))
 
             # run_conf = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=False)
@@ -309,10 +309,6 @@ class crawl4ai:
             # aggregating everything
             for text in similar_texts:
                 final_info += "\n".join(text) + "\n\n"
-                
-        if (self.task_id and self.progress):
-            self.progress["progress"] = 60
-            publish_progress(self.task_id, dumps(self.progress))
 
         return final_info, content_urls, queries
 
@@ -334,7 +330,7 @@ class crawl4ai:
         # Invoke the gemini llm
         start_time = time.time()
         if (self.task_id and self.progress):
-            self.progress["progress"] = 70
+            self.progress["progress"] = 85
             publish_progress(self.task_id, dumps(self.progress))
         gemini_response = self.run_gemini(external_sources, self.article_id)
         if gemini_response:
