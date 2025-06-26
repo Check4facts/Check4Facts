@@ -35,7 +35,8 @@ class crawl4ai:
         self.web_sources = web_sources
         self.article_id = article_id
         # self.model = SentenceTransformer("distiluse-base-multilingual-cased-v2")
-        self.model = SentenceTransformer("sentence-transformers/LaBSE")
+        self.model = SentenceTransformer("lighteternal/stsb-xlm-r-greek-transfer")
+        self.emb_dim = self.model.get_sentence_embedding_dimension()
         self.provided_urls = provided_urls
         self.search_engine = SearchEngine(2)
         self.task_id = task_id
@@ -64,7 +65,7 @@ class crawl4ai:
             self.urls = self.provided_urls
             return self.urls, ""
 
-    def chunk_text(self, text, chunk_size=500, overlap_size=50):
+    def chunk_text(self, text, chunk_size=1500, overlap_size=200):
         sentences = nltk.sent_tokenize(text)
         chunks = []
         current_chunk = ""
@@ -92,14 +93,15 @@ class crawl4ai:
     def get_sim_text(
         self,
         text,
-        min_threshold=0.2,
-        chunk_size=500,
+        claim_embedding,
+        min_threshold=0.4,
+        chunk_size=1500,
     ):
         if not text:
             return []
-        claim_embedding = self.model.encode(
-            self.claim, convert_to_tensor=True, show_progress_bar=False
-        )
+        # claim_embedding = self.model.encode(
+        #     self.claim, convert_to_tensor=True, show_progress_bar=False
+        # )
         filtered_results = []
         chunks = self.chunk_text(text, chunk_size)
         if not chunks:
@@ -107,7 +109,7 @@ class crawl4ai:
         # print("LEN OF CHUNKS OF THE FILE IS: ")
         # print(len(chunks))
         chunk_embeddings = self.model.encode(
-            chunks, convert_to_tensor=True, show_progress_bar=False
+            chunks, convert_to_tensor=True, show_progress_bar=True
         )
         chunk_similarities = util.cos_sim(claim_embedding, chunk_embeddings)
         for chunk, similarity in zip(chunks, chunk_similarities[0]):
@@ -117,7 +119,6 @@ class crawl4ai:
                 print(similarity)
                 print("--------------------------------------------------")
                 filtered_results.append(chunk)
-        # print(f"NUMBER OF FILTERED CHUNKS IS: {len(filtered_results)}")
         if len(filtered_results) == 0:
             return []
         return filtered_results
@@ -195,17 +196,13 @@ class crawl4ai:
             print(f"Failed to download PDF. Status code: {response.status_code}")
 
     async def get_external_knowledge(self):
+        claim_embedding = self.model.encode(
+            self.claim, convert_to_tensor=True, show_progress_bar=True
+        )
         urls, queries = self.get_urls()
         # store the urls that actually provided us with information
         content_urls = []
         final_info = ""
-        # for debugging
-        # urls = [
-        #     "https://www.hellenicparliament.gr/UserFiles/8c3e9046-78fb-48f4-bd82-bbba28ca1ef5/vouli_en_low_28_1_09.pdf"
-        # ]
-        # urls = [
-        #     "https://www.hellenicparliament.gr/UserFiles/8c3e9046-78fb-48f4-bd82-bbba28ca1ef5/vouli_site_version.pdf"
-        # ]
         html_urls = []
         pdf_urls = []
 
@@ -213,6 +210,9 @@ class crawl4ai:
         for url in urls:
             if url.lower().endswith(".pdf"):
                 pdf_urls.append(url)
+            if url.endswith(".xml"):
+                print(f"[SKIP] XML URL skipped: {url}")
+                continue
             else:
                 # extra block of code for checking for pdf files (unnecessary for now)
                 # try:
@@ -227,66 +227,73 @@ class crawl4ai:
                 # except Exception as e:
                 #     print(f"[HEAD ERROR] {url} => {e}")
                 html_urls.append(url)  # fallback
-
-        # run_conf = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=True)
-        # async with AsyncWebCrawler() as crawler:
-
-        #     # parsing the non-pdf urls
-        #     print(f"URLS to be harvested {html_urls}")
-        #     async for result in await crawler.arun_many(html_urls, config=run_conf):
-
-        #         if result.success:
-        #             print(
-        #                 f"[OK] {result.url}, length: {len(result.markdown.raw_markdown)}"
-        #             )
-        #         else:
-        #             print(f"[ERROR] {result.url} => {result.error_message}")
-
-        #     run_conf = run_conf.clone(stream=False)
-        #     results = await crawler.arun_many(html_urls, config=run_conf)
-        #     similar_texts = []
-        #     for res in results:
-        #         if res.success:
-
-        #             print(f"[OK] {res.url}, length: {len(res.markdown.raw_markdown)}")
-        #             similar_chunks = self.get_sim_text(
-        #                 self.convert_markdown_to_text(res.markdown.raw_markdown),
-        #             )
-        #             if similar_chunks:
-        #                 content_urls.append(res.url)
-        #             similar_texts.append(similar_chunks)
-        #         else:
-        #             print(f"[ERROR] {res.url} => {res.error_message}")
                 
         if (self.task_id and self.progress):
             self.progress["progress"] = 20
             publish_progress(self.task_id, dumps(self.progress))
-        run_conf = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=False)
+
+        run_conf = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=True)
         async with AsyncWebCrawler() as crawler:
-            results = await crawler.arun_many(html_urls, config=run_conf)
+
+            # parsing the non-pdf urls
+            print(f"URLS to be harvested {html_urls}")
             similar_texts = []
+            idx = 0
+            total = len(html_urls)
+            async for result in await crawler.arun_many(html_urls, config=run_conf):
+                idx += 1
 
-            # Progress update: from 20% to 60% over all results
-            total = len(results)
-            for idx, res in enumerate(results):
-                if res.success:
-                    print(f"[OK] {res.url}, length: {len(res.markdown.raw_markdown)}")
-                    similar_chunks = self.get_sim_text(
-                        self.convert_markdown_to_text(res.markdown.raw_markdown),
+                if result.success:
+                    print(
+                        f"[OK] {result.url}, length: {len(result.markdown.raw_markdown)}"
                     )
-
+                    if len(result.markdown.raw_markdown) > 500000:
+                        print(f"[SKIPPED] {result.url} is too large to process.")
+                        continue  # skip large files
+                    similar_chunks = []
+                    similar_chunks = self.get_sim_text(
+                        self.convert_markdown_to_text(result.markdown.raw_markdown),
+                        claim_embedding,
+                    )
                     if similar_chunks != []:
-                        content_urls.append(res.url)
-
+                        content_urls.append(result.url)
                     similar_texts.append(similar_chunks)
                 else:
-                    print(f"[ERROR] {res.url} => {res.error_message}")
+                    print(f"[ERROR] {result.url} => {result.error_message}")
 
                 # Update progress after each result
                 if self.task_id and self.progress and total > 0:
-                    # Linear interpolation from 20 to 60
-                    self.progress["progress"] = 20 + ((idx + 1) / total) * 40
+                    # Linear interpolation from 20 to 80
+                    self.progress["progress"] = 20 + ((idx) / total) * 60
                     publish_progress(self.task_id, dumps(self.progress))
+
+            # run_conf = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=False)
+            # async with AsyncWebCrawler() as crawler:
+            #     results = await crawler.arun_many(html_urls, config=run_conf)
+            #     similar_texts = []
+
+            #     for res in results:
+            #         if res.success:
+            #             print("URL content harvested successfully.")
+            #             print(f"[OK] {res.url}, length: {len(res.markdown.raw_markdown)}")
+            #             if len(res.markdown.raw_markdown) > 500000:
+            #                 print(f"[SKIPPED] {res.url} is too large to process.")
+            #                 continue  # skip large files
+            #             print(f"Processing URL: {res.url}")
+            #             print("Converting markdown to text...")
+            #             plain_text = self.convert_markdown_to_text(
+            #                 res.markdown.raw_markdown
+            #             )
+            #             print("Conversion done. Calculating similarity...")
+            #             similar_chunks = self.get_sim_text(plain_text, claim_embedding)
+            #             print("Similarity calculation done.")
+
+            #             if similar_chunks != []:
+            #                 content_urls.append(res.url)
+
+            #             similar_texts.append(similar_chunks)
+            #         else:
+            #             print(f"[ERROR] {res.url} => {res.error_message}")
 
             # parsing the pdf files
             # for pdf in pdf_urls:
@@ -302,10 +309,6 @@ class crawl4ai:
             # aggregating everything
             for text in similar_texts:
                 final_info += "\n".join(text) + "\n\n"
-                
-        if (self.task_id and self.progress):
-            self.progress["progress"] = 60
-            publish_progress(self.task_id, dumps(self.progress))
 
         return final_info, content_urls, queries
 
@@ -318,15 +321,8 @@ class crawl4ai:
             return None
 
         external_sources, urls, queries = asyncio.run(self.get_external_knowledge())
+        print("GOT EXTERNAL SOURCES. CALLING THE LLM NOW...")
 
-        # for debugging purposes
-        # print(
-        #     "----------------------------EXTERNAL SOURCES HARVESTED----------------------------"
-        # )
-        # print(external_sources)
-        # print(
-        #     "----------------------------------------------------------------------------------"
-        # )
         extraction_time = np.round(
             (time.time() - start_time),
         )
@@ -334,7 +330,7 @@ class crawl4ai:
         # Invoke the gemini llm
         start_time = time.time()
         if (self.task_id and self.progress):
-            self.progress["progress"] = 70
+            self.progress["progress"] = 85
             publish_progress(self.task_id, dumps(self.progress))
         gemini_response = self.run_gemini(external_sources, self.article_id)
         if gemini_response:

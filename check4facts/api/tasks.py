@@ -411,7 +411,7 @@ def justify_task(self, statement_id, n):
         answer = crawler.run_crawler()
         if answer:
             
-            progress["progress"] = 80
+            progress["progress"] = 95
             publish_progress(self.request.id, json.dumps(progress))
             log.debug("FINAL ANSWER: ")
             for key, value in answer.items():
