@@ -15,6 +15,7 @@ from check4facts.scripts.rag.mistral_llm import mistral_llm
 from check4facts.scripts.rag.search_api import google_search, search_queries
 from check4facts.scripts.web_crawler_rag.search_engine import SearchEngine
 from check4facts.scripts.web_crawler_rag.url_generation import url_generation
+from check4facts.scripts.web_crawler_rag.OllamaEmbeddings import OllamaEmbeddings
 import aiohttp
 import requests
 import os
@@ -25,6 +26,8 @@ import langdetect
 
 
 nltk.download("punkt")
+# Default behavior is to use Ollama embeddings, if USE_HF is set to True, it will use Hugging Face SentenceTransformer
+hf = os.getenv("USE_HF", "False").lower() == "true"
 
 
 class crawl4ai:
@@ -33,15 +36,17 @@ class crawl4ai:
         self.web_sources = web_sources
         self.article_id = article_id
         # self.model = SentenceTransformer("distiluse-base-multilingual-cased-v2")
-        self.model = SentenceTransformer("lighteternal/stsb-xlm-r-greek-transfer")
-        self.emb_dim = self.model.get_sentence_embedding_dimension()
+        if hf:
+            self.model = SentenceTransformer("lighteternal/stsb-xlm-r-greek-transfer")
+            self.emb_dim = self.model.get_sentence_embedding_dimension()
+
         self.provided_urls = provided_urls
         self.search_engine = SearchEngine(2)
 
     def get_urls(self):
         # if no urls were provided
         if not self.provided_urls:
-            # traditional blacklist searching api
+            # traditional blacklist searching apix
             # print("No urls provided. Searching the web for urls....")
             # self.urls = google_search(self.claim, self.web_sources)
             # return self.urls
@@ -61,7 +66,7 @@ class crawl4ai:
             self.urls = self.provided_urls
             return self.urls, ""
 
-    def chunk_text(self, text, chunk_size=1500, overlap_size=200):
+    def chunk_text(self, text, chunk_size=1400, overlap_size=200):
         sentences = nltk.sent_tokenize(text)
         chunks = []
         current_chunk = ""
@@ -86,12 +91,50 @@ class crawl4ai:
         lang = langdetect.detect(chunk_text)
         return 0.4 if lang == "el" else 0.3
 
-    def get_sim_text(
+    def get_sim_text_ollama(
         self,
         text,
         claim_embedding,
-        min_threshold=0.4,
-        chunk_size=1500,
+        ollama_handler: OllamaEmbeddings,
+        min_threshold=0.3,
+        chunk_size=1400,
+    ):
+        if not text:
+            return []
+
+        filtered_results = []
+        chunks = self.chunk_text(text, chunk_size)
+        if not chunks:
+            return []
+
+        for chunk in chunks:
+            try:
+                chunk_embedding = ollama_handler.compute_embedding(chunk)
+                similarity = ollama_handler.cosine_similarity(
+                    claim_embedding, chunk_embedding
+                )
+            except Exception as e:
+                print(f"Error computing embedding similarity for chunk: {e}")
+                continue
+
+            if similarity >= min_threshold:
+                print(chunk)
+                print()
+                print(similarity)
+                print("--------------------------------------------------")
+                filtered_results.append(chunk)
+
+        if len(filtered_results) == 0:
+            return []
+
+        return filtered_results
+
+    def get_sim_text_hf(
+        self,
+        text,
+        claim_embedding,
+        min_threshold=0.3,
+        chunk_size=1400,
     ):
         if not text:
             return []
@@ -105,7 +148,7 @@ class crawl4ai:
         # print("LEN OF CHUNKS OF THE FILE IS: ")
         # print(len(chunks))
         chunk_embeddings = self.model.encode(
-            chunks, convert_to_tensor=True, show_progress_bar=True
+            chunks, convert_to_tensor=True, show_progress_bar=False
         )
         chunk_similarities = util.cos_sim(claim_embedding, chunk_embeddings)
         for chunk, similarity in zip(chunks, chunk_similarities[0]):
@@ -191,13 +234,18 @@ class crawl4ai:
         else:
             print(f"Failed to download PDF. Status code: {response.status_code}")
 
-    async def get_external_knowledge(self):
-        claim_embedding = self.model.encode(
-            self.claim, convert_to_tensor=True, show_progress_bar=True
-        )
+    async def get_external_knowledge(self, hf):
+        if hf == True:
+            claim_embedding = self.model.encode(
+                self.claim, convert_to_tensor=True, show_progress_bar=False
+            )
+        else:
+            ollama_handler = OllamaEmbeddings()
+            claim_embedding = ollama_handler.compute_embedding(self.claim)
         urls, queries = self.get_urls()
+        urls = list(set(urls))
         # store the urls that actually provided us with information
-        content_urls = []
+        content_urls = set()
         final_info = ""
         html_urls = []
         pdf_urls = []
@@ -240,12 +288,19 @@ class crawl4ai:
                         print(f"[SKIPPED] {result.url} is too large to process.")
                         continue  # skip large files
                     similar_chunks = []
-                    similar_chunks = self.get_sim_text(
-                        self.convert_markdown_to_text(result.markdown.raw_markdown),
-                        claim_embedding,
-                    )
+                    if hf == True:
+                        similar_chunks = self.get_sim_text_hf(
+                            self.convert_markdown_to_text(result.markdown.raw_markdown),
+                            claim_embedding,
+                        )
+                    elif hf == False:
+                        similar_chunks = self.get_sim_text_ollama(
+                            self.convert_markdown_to_text(result.markdown.raw_markdown),
+                            claim_embedding,
+                            ollama_handler,
+                        )
                     if similar_chunks != []:
-                        content_urls.append(result.url)
+                        content_urls.add(result.url)
                     similar_texts.append(similar_chunks)
                 else:
                     print(f"[ERROR] {result.url} => {result.error_message}")
@@ -303,7 +358,9 @@ class crawl4ai:
             )
             return None
 
-        external_sources, urls, queries = asyncio.run(self.get_external_knowledge())
+        external_sources, urls, queries = asyncio.run(
+            self.get_external_knowledge(hf=False)
+        )
         print("GOT EXTERNAL SOURCES. CALLING THE LLM NOW...")
 
         extraction_time = np.round(

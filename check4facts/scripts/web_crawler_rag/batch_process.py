@@ -15,7 +15,48 @@ def testing_new():
     from urllib.parse import urlparse
 
     blacklisted_ids = [129]
-    results_path = "data/rag_results_final.csv"
+    results_path = "data/rag_results_unverified_ids.csv"
+    unverified_ids = [
+        7,
+        24,
+        77,
+        51,
+        63,
+        171,
+        247,
+        127,
+        164,
+        259,
+        130,
+        252,
+        104,
+        57,
+        166,
+        249,
+        167,
+        174,
+        260,
+        67,
+        88,
+        131,
+        45,
+        89,
+        75,
+        133,
+        90,
+        81,
+        177,
+        83,
+        135,
+        97,
+        91,
+        136,
+        86,
+        137,
+        34,
+        189,
+        235,
+    ]
 
     # Load already processed IDs if file exists
     if os.path.exists(results_path):
@@ -35,6 +76,9 @@ def testing_new():
             continue  # Skip already processed claims
         if id in blacklisted_ids:
             print(f"ID:{id} is blacklisted. Skipping....")
+            continue
+        if id not in unverified_ids:
+            print(f"ID:{id} is not in the unverified list. Skipping....")
             continue
 
         print(f"Processing ID: {id}")
