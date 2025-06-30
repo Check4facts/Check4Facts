@@ -611,9 +611,10 @@ class DBHandler:
                 INSERT INTO justification (statement_id, text, timestamp, elapsed_time, label, model, sources)
                 VALUES (%s, %s, %s, %s, %s, %s, %s);
             """
+            sources_as_list = list(sources)
             self.cursor.execute(
                 sql,
-                (statement_id, text, timestamp, elapsed_time, label, model, sources),
+                (statement_id, text, timestamp, elapsed_time, label, model, sources_as_list),
             )
             self.connection.commit()
             log.info(
