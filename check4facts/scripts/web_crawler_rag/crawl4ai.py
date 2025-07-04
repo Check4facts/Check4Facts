@@ -25,12 +25,15 @@ from datetime import datetime
 import pymupdf4llm
 import langdetect
 from json import dumps
-
+import requests
 
 nltk.download("punkt")
 # Default behavior is to use Ollama embeddings, if USE_HF is set to True, it will use Hugging Face SentenceTransformer
-hf = os.getenv("USE_HF", "False").lower() == "true"
-
+hf = os.getenv("USE_HF")
+print(f"HF: {hf}")
+# EMBEDDINGS_API_URL is the url of the embeddings api for the embeddings of the claim
+embeddings_api_url = os.getenv("EMBEDDINGS_API_URL")
+print(f"EMBEDDINGS_API_URL: {embeddings_api_url}")
 
 class crawl4ai:
     def __init__(self, claim, web_sources, article_id, provided_urls, task_id:str = None, progress:dict[str, any] = None):
@@ -38,7 +41,7 @@ class crawl4ai:
         self.web_sources = web_sources
         self.article_id = article_id
         # self.model = SentenceTransformer("distiluse-base-multilingual-cased-v2")
-        if hf:
+        if embeddings_api_url is None and hf is not None:
             self.model = SentenceTransformer("lighteternal/stsb-xlm-r-greek-transfer")
             self.emb_dim = self.model.get_sentence_embedding_dimension()
 
@@ -239,13 +242,16 @@ class crawl4ai:
             print(f"Failed to download PDF. Status code: {response.status_code}")
 
     async def get_external_knowledge(self, hf):
-        if hf == True:
-            claim_embedding = self.model.encode(
-                self.claim, convert_to_tensor=True, show_progress_bar=False
-            )
+        if embeddings_api_url is None:
+            if hf is not None:
+                claim_embedding = self.model.encode(
+                    self.claim, convert_to_tensor=True, show_progress_bar=False
+                )
+            else:
+                ollama_handler = OllamaEmbeddings()
+                claim_embedding = ollama_handler.compute_embedding(self.claim)
         else:
-            ollama_handler = OllamaEmbeddings()
-            claim_embedding = ollama_handler.compute_embedding(self.claim)
+            claim_embedding = requests.post(f"{embeddings_api_url}/claim_embedding_hf", json={"text": self.claim}).json()["embedding"]
         urls, queries = self.get_urls()
         urls = list(set(urls))
         # store the urls that actually provided us with information
@@ -299,17 +305,28 @@ class crawl4ai:
                         print(f"[SKIPPED] {result.url} is too large to process.")
                         continue  # skip large files
                     similar_chunks = []
-                    if hf == True:
-                        similar_chunks = self.get_sim_text_hf(
-                            self.convert_markdown_to_text(result.markdown.raw_markdown),
-                            claim_embedding,
-                        )
-                    elif hf == False:
-                        similar_chunks = self.get_sim_text_ollama(
-                            self.convert_markdown_to_text(result.markdown.raw_markdown),
-                            claim_embedding,
-                            ollama_handler,
-                        )
+                    if embeddings_api_url is None:
+                        if hf is not None:
+                            similar_chunks = self.get_sim_text_hf(
+                                self.convert_markdown_to_text(result.markdown.raw_markdown),
+                                claim_embedding,
+                            )
+                        else:
+                            similar_chunks = self.get_sim_text_ollama(
+                                self.convert_markdown_to_text(result.markdown.raw_markdown),
+                                claim_embedding,
+                                ollama_handler,
+                            )
+                    else:
+                        similar_chunks = requests.post(
+                            f"{embeddings_api_url}/sim_text_hf",
+                            json={
+                                "text": self.convert_markdown_to_text(result.markdown.raw_markdown),
+                                "claim_embedding": claim_embedding,
+                                "min_threshold": 0.3,
+                                "chunk_size": 1400,
+                            },
+                        ).json()["filtered_chunks"]
                     if similar_chunks != []:
                         content_urls.add(result.url)
                     similar_texts.append(similar_chunks)
