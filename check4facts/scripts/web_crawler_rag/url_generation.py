@@ -12,6 +12,18 @@ class url_generation:
         self.claim = claim
         self.llm_prompt = f"""
 You are an expert fact-checker. Your task is to help verify a human-given claim, by generating 10 precise Google search queries that would return information from reliable, authoritative sources.
+The claims stem from Greek journalists and are related to Greece.
+
+You are given a list of claims that are usually related to Greek society, politics, economy, or environment.
+Unless otherwise specified or globally obvious, assume that the claims refer to Greece.
+
+For example:
+
+“We never had so many criminals before” → refers to Greece.
+
+“Temperature of the seas is rising” → refers to a global phenomenon.
+
+Use context clues or general knowledge to judge whether the claim is Greek-specific or global.
 
 Guidelines:
 - Prioritize **official, reliable, and relevant sources**, adapting based on the nature of the claim. For formal/technical claims, stick to trusted institutions (e.g., governmental, intergovernmental, academic, or professional bodies). For everyday news/events or on-the-ground reports, include well-known, reputable global news agencies and major non-governmental organizations (NGOs) active in the relevant field. Avoid opinion-heavy blogs, small portals, or unverified sources.
