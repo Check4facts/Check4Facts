@@ -95,7 +95,7 @@ def google_llm(article_id, text):
     try:
         print("Invoking gemini llm....")
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel(os.getenv("GEMINI_LLM_MODEL", "gemini-2.0-flash"))
         start_time = time.time()
         # text = translate_long_text(text, src_lang='el', target_lang='en')
         response = model.generate_content(

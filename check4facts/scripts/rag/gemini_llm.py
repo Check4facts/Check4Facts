@@ -95,7 +95,7 @@ class gemini_llm:
 
         try:
             genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-            model = genai.GenerativeModel("gemini-2.0-flash")
+            model = genai.GenerativeModel(os.getenv("GEMINI_LLM_MODEL", "gemini-2.0-flash"))
             if self.external_knowledge is not None:
                 response = model.generate_content(self.prompt_with_rag)
             else:

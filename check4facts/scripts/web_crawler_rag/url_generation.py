@@ -94,7 +94,7 @@ Best 10 Google Search Queries WIHTOUT ANY ADDITIONAL TEXT OR COMMENTARY:
 
         try:
             genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-            model = genai.GenerativeModel("gemini-2.0-flash")
+            model = genai.GenerativeModel(os.getenv("GEMINI_LLM_MODEL", "gemini-2.0-flash"))
 
             response = model.generate_content(self.llm_prompt)
 
